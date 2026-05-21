@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  RECRUITER
+}
+
+enum CandidateStatus {
+  PENDING
+  SYSTEM_CHECK_FAILED
+  AUDIO_PENDING
+  PROCESSING
+  LEVEL1_PASSED
+  REJECTED
+}
+
+// Stage 2 enum – pre-built
+enum AttendanceStatus {
+  SCHEDULED
+  CANDIDATE_JOINED
+  RECRUITER_JOINED
+  COMPLETED
+  NO_SHOW
+}
+
+// ─────────────────────────────────────────────────────────────
+// STAGE 1 MODELS
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         UserRole @default(RECRUITER)
+  department   String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  assignedCandidates RecruiterCandidateAssignment[]
+  internalNotes      InternalNote[]
+  // Stage 2 relations – pre-built
+  availability       RecruiterAvailability[]
+  interviews         Interview[]                    @relation("RecruiterInterviews")
+
+  @@map("users")
+}
+
+model Candidate {
+  id                String          @id @default(cuid())
+  fullName          String          @map("full_name")
+  email             String          @unique
+  phone             String
+  location          String
+  yearsExperience   Int             @map("years_experience")
+  availabilityShift String          @map("availability_shift")
+  certifications    String[]
+  cvUrl             String?         @map("cv_url")
+  certificateUrl    String?         @map("certificate_url")
+  selectedLanguage  String          @map("selected_language")
+  status            CandidateStatus @default(PENDING)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  systemCheck        SystemCheck?
+  audioRecording     AudioRecording?
+  filterResult       FilterResult?
+  emailLogs          EmailLog[]
+  assignedRecruiters RecruiterCandidateAssignment[]
+  internalNotes      InternalNote[]
+  // Stage 2 relation – pre-built
+  interviews         Interview[]
+
+  @@map("candidates")
+}
+
+model SystemCheck {
+  id               String   @id @default(cuid())
+  candidateId      String   @unique @map("candidate_id")
+  downloadSpeed    Float    @map("download_speed")
+  uploadSpeed      Float    @map("upload_speed")
+  deviceType       String   @map("device_type")
+  os               String
+  browser          String
+  micPermitted     Boolean  @map("mic_permitted")
+  speakerPermitted Boolean  @map("speaker_permitted")
+  passed           Boolean
+  checkedAt        DateTime @default(now()) @map("checked_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@map("system_checks")
+}
+
+model AudioRecording {
+  id                   String    @id @default(cuid())
+  candidateId          String    @unique @map("candidate_id")
+  audioUrl             String    @map("audio_url")
+  durationSeconds      Float     @map("duration_seconds")
+  transcript           String?
+  fluencyScore         Float?    @map("fluency_score")
+  languageDetected     String?   @map("language_detected")
+  whisperRawResponse   Json?     @map("whisper_raw_response")
+  flaggedForHumanReview Boolean  @default(false) @map("flagged_for_human_review")
+  processedAt          DateTime? @map("processed_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@map("audio_recordings")
+}
+
+model FilterResult {
+  id               String   @id @default(cuid())
+  candidateId      String   @unique @map("candidate_id")
+  filtersApplied   Json     @map("filters_applied")
+  rejectionReasons String[] @map("rejection_reasons")
+  qualified        Boolean
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@map("filter_results")
+}
+
+model EmailLog {
+  id           String   @id @default(cuid())
+  candidateId  String   @map("candidate_id")
+  emailType    String   @map("email_type")
+  sentAt       DateTime @default(now()) @map("sent_at")
+  success      Boolean
+  errorMessage String?  @map("error_message")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@map("email_logs")
+}
+
+model RecruiterCandidateAssignment {
+  id          String   @id @default(cuid())
+  recruiterId String   @map("recruiter_id")
+  candidateId String   @map("candidate_id")
+  assignedAt  DateTime @default(now()) @map("assigned_at")
+
+  recruiter User      @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([recruiterId, candidateId])
+  @@map("recruiter_candidate_assignments")
+}
+
+model InternalNote {
+  id          String   @id @default(cuid())
+  candidateId String   @map("candidate_id")
+  userId      String   @map("user_id")
+  note        String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("internal_notes")
+}
+
+// ─────────────────────────────────────────────────────────────
+// STAGE 2 MODELS – Pre-built for Microsoft Teams integration.
+// Activate by wiring MS_CLIENT_ID / MS_CLIENT_SECRET / MS_TENANT_ID.
+// ─────────────────────────────────────────────────────────────
+
+model RecruiterAvailability {
+  id          String   @id @default(cuid())
+  recruiterId String   @map("recruiter_id")
+  dayOfWeek   Int      @map("day_of_week") // 0=Sun … 6=Sat
+  startTime   String   @map("start_time")  // "HH:mm"
+  endTime     String   @map("end_time")    // "HH:mm"
+  isBooked    Boolean  @default(false) @map("is_booked")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  recruiter User @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+
+  @@map("recruiter_availability")
+}
+
+model Interview {
+  id               String           @id @default(cuid())
+  candidateId      String           @map("candidate_id")
+  recruiterId      String           @map("recruiter_id")
+  scheduledTime    DateTime         @map("scheduled_time")
+  msTeamsLink      String?          @map("ms_teams_link")
+  attendanceStatus AttendanceStatus @default(SCHEDULED) @map("attendance_status")
+  recruiterJoinTime DateTime?       @map("recruiter_join_time")
+  candidateJoinTime DateTime?       @map("candidate_join_time")
+  waitTimeMinutes   Float?          @map("wait_time_minutes")
+  recordingUrl      String?         @map("recording_url")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  recruiter User      @relation("RecruiterInterviews", fields: [recruiterId], references: [id], onDelete: Cascade)
+
+  @@map("interviews")
+}

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\HP\\\\Desktop\\\\Pre screening\\\\backend\" -Force | Where-Object { -not $_.Name.StartsWith\\('.'\\) -or $_.Name -eq '.env' -or $_.Name -eq '.env.example' })"
+    ]
+  }
+}
