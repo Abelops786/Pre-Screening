@@ -43,7 +43,8 @@ export default function ApplyPage() {
     useDropzone({ onDrop: onDropCert, accept: { 'application/pdf': [], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [] }, maxFiles: 1 });
 
   const onSubmit = async (values: FormValues) => {
-    if (!cvFile) { toast.error('Please upload your CV'); return; }
+    // Bypassed for demo
+    // if (!cvFile) { toast.error('Please upload your CV'); return; }
     setSubmitting(true);
 
     try {
@@ -58,7 +59,8 @@ export default function ApplyPage() {
 
       const candidateId: string = data.data.candidateId;
 
-      // Upload documents
+      // Upload documents skipped for demo
+      /*
       const formData = new FormData();
       formData.append('cv', cvFile);
       if (certFile) formData.append('certificate', certFile);
@@ -66,6 +68,7 @@ export default function ApplyPage() {
       await api.post(`/upload/${candidateId}/documents`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      */
 
       toast.success('Application submitted!');
       router.push(`/apply/system-check?id=${candidateId}`);
