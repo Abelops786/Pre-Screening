@@ -1,4 +1,4 @@
-const msService = require('../../services/microsoft.service');
+const msService = require('../services/microsoft.service');
 const prisma = require('../../config/database');
 const logger = require('../../utils/logger');
 
