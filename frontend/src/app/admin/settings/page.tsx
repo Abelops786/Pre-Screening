@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle, Link as LinkIcon, RefreshCw, AlertCircle } from 'lucide-react';
 
-export default function SettingsPage() {
+function SettingsContent() {
   const searchParams = useSearchParams();
   const [msConnected, setMsConnected] = useState<boolean | null>(null);
 
@@ -17,7 +17,6 @@ export default function SettingsPage() {
   }, [searchParams]);
 
   const handleConnectMicrosoft = () => {
-    // Redirect to backend MS login route
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/ms/login`;
   };
 
@@ -68,5 +67,13 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading settings...</div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }
