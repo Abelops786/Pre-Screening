@@ -55,6 +55,8 @@ model User {
   // Stage 2 relations – pre-built
   availability       RecruiterAvailability[]
   interviews         Interview[]                    @relation("RecruiterInterviews")
+  msAccessToken      String?                        @map("ms_access_token")
+  msRefreshToken     String?                        @map("ms_refresh_token")
 
   @@map("users")
 }

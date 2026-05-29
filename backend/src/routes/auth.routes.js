@@ -23,5 +23,6 @@ router.post('/users',  authenticate, isSuperAdmin, createUserValidation, authCon
 router.get('/users',   authenticate, isSuperAdmin, authController.listUsers);
 router.patch('/users/:id',  authenticate, isSuperAdmin, authController.updateUser);
 router.delete('/users/:id', authenticate, isSuperAdmin, authController.deleteUser);
+router.use('/ms', require('./v1/ms.routes'));
 
 module.exports = router;
