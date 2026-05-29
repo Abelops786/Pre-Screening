@@ -9,18 +9,14 @@ async function main() {
   const password = process.env.SEED_ADMIN_PASSWORD || 'Admin@1234!';
   const name     = process.env.SEED_ADMIN_NAME     || 'Super Admin';
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    console.log(`Super admin already exists: ${email}`);
-    return;
-  }
-
   const passwordHash = await bcrypt.hash(password, 12);
-  const user = await prisma.user.create({
-    data: { email, passwordHash, name, role: 'SUPER_ADMIN' },
+  const user = await prisma.user.upsert({
+    where:  { email },
+    update: { passwordHash, name, role: 'SUPER_ADMIN' },
+    create: { email, passwordHash, name, role: 'SUPER_ADMIN' },
   });
 
-  console.log(`Super admin created:`);
+  console.log(`Super admin upserted:`);
   console.log(`  Email:    ${user.email}`);
   console.log(`  Password: ${password}`);
   console.log(`  Role:     ${user.role}`);
