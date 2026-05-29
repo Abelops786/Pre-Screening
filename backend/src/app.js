@@ -11,6 +11,9 @@ const logger = require('./utils/logger');
 
 const app = express();
 
+// Trust Railway's reverse proxy so rate-limiter can read the real client IP
+app.set('trust proxy', 1);
+
 // CORS must be before helmet so security headers don't interfere
 app.use((req, res, next) => {
   const origin = req.headers.origin;
