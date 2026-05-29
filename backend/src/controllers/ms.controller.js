@@ -1,6 +1,6 @@
 const msService = require('../services/microsoft.service');
-const prisma = require('../../config/database');
-const logger = require('../../utils/logger');
+const prisma = require('../config/database');
+const logger = require('../utils/logger');
 
 const login = async (req, res) => {
   try {
