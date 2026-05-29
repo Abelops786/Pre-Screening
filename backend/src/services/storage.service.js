@@ -23,7 +23,8 @@ const upload = async (buffer, originalName, mimeType, folder = 'uploads') => {
     const basename = path.basename(filename);
     fs.writeFileSync(path.join(uploadDir, basename), buffer);
     logger.info('File saved locally', { filename });
-    return `http://localhost:${process.env.PORT || 4000}/files/${folder}/${basename}`;
+    const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 4000}`;
+    return `${baseUrl}/files/${folder}/${basename}`;
   }
 
   if (provider === 's3') {
