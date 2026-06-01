@@ -1,10 +1,9 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { useDropzone } from 'react-dropzone';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
 import { LANGUAGES, SHIFTS } from '@/types';
@@ -29,18 +28,12 @@ export default function ApplyPage() {
   const [certFile, setCertFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const cvInputRef   = useRef<HTMLInputElement>(null);
+  const certInputRef = useRef<HTMLInputElement>(null);
+
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
-
-  const onDropCv = useCallback((files: File[]) => { if (files[0]) setCvFile(files[0]); }, []);
-  const onDropCert = useCallback((files: File[]) => { if (files[0]) setCertFile(files[0]); }, []);
-
-  const { getRootProps: getCvProps, getInputProps: getCvInput, isDragActive: isCvActive } =
-    useDropzone({ onDrop: onDropCv, accept: { 'application/pdf': [], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [] }, maxFiles: 1 });
-
-  const { getRootProps: getCertProps, getInputProps: getCertInput, isDragActive: isCertActive } =
-    useDropzone({ onDrop: onDropCert, accept: { 'application/pdf': [], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [] }, maxFiles: 1 });
 
   const onSubmit = async (values: FormValues) => {
     // Bypassed for demo
@@ -91,37 +84,6 @@ export default function ApplyPage() {
       setSubmitting(false);
     }
   };
-
-  const DropZone = ({
-    rootProps, inputProps, isDragActive, file, label,
-  }: {
-    rootProps: ReturnType<typeof useDropzone>['getRootProps'];
-    inputProps: ReturnType<typeof useDropzone>['getInputProps'];
-    isDragActive: boolean;
-    file: File | null;
-    label: string;
-  }) => (
-    <div
-      {...rootProps()}
-      className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-        isDragActive ? 'border-brand-500 bg-brand-50' : 'border-gray-300 hover:border-brand-400 hover:bg-gray-50'
-      }`}
-    >
-      <input {...inputProps()} />
-      {file ? (
-        <div className="flex items-center justify-center gap-2 text-green-600">
-          <CheckCircle size={20} />
-          <span className="text-sm font-medium truncate max-w-[200px]">{file.name}</span>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-2 text-gray-500">
-          <Upload size={24} />
-          <p className="text-sm">{label}</p>
-          <p className="text-xs text-gray-400">PDF or DOCX, max 10MB</p>
-        </div>
-      )}
-    </div>
-  );
 
   const Field = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
     <div>
@@ -189,11 +151,39 @@ export default function ApplyPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">CV / Resume *</label>
-                <DropZone rootProps={getCvProps} inputProps={getCvInput} isDragActive={isCvActive} file={cvFile} label="Drag & drop your CV here" />
+                <input ref={cvInputRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={(e) => setCvFile(e.target.files?.[0] || null)} />
+                <div onClick={() => cvInputRef.current?.click()} className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors border-gray-300 hover:border-brand-400 hover:bg-gray-50">
+                  {cvFile ? (
+                    <div className="flex items-center justify-center gap-2 text-green-600">
+                      <CheckCircle size={20} />
+                      <span className="text-sm font-medium truncate max-w-[200px]">{cvFile.name}</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-gray-500">
+                      <Upload size={24} />
+                      <p className="text-sm">Click to upload your CV</p>
+                      <p className="text-xs text-gray-400">PDF or DOCX, max 10MB</p>
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Certificates (optional)</label>
-                <DropZone rootProps={getCertProps} inputProps={getCertInput} isDragActive={isCertActive} file={certFile} label="Drag & drop certificates" />
+                <input ref={certInputRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={(e) => setCertFile(e.target.files?.[0] || null)} />
+                <div onClick={() => certInputRef.current?.click()} className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors border-gray-300 hover:border-brand-400 hover:bg-gray-50">
+                  {certFile ? (
+                    <div className="flex items-center justify-center gap-2 text-green-600">
+                      <CheckCircle size={20} />
+                      <span className="text-sm font-medium truncate max-w-[200px]">{certFile.name}</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-gray-500">
+                      <Upload size={24} />
+                      <p className="text-sm">Click to upload certificate</p>
+                      <p className="text-xs text-gray-400">PDF or DOCX, max 10MB</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
