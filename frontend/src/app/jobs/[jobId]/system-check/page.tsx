@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
-import { Wifi, Mic, CheckCircle, XCircle, Loader2, Monitor } from 'lucide-react';
+import { Wifi, CheckCircle, XCircle, Loader2, Monitor } from 'lucide-react';
 
 type SpeedResult = { download: number; upload: number };
 
@@ -105,7 +105,7 @@ function SystemCheckContent() {
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <Image src="/logo.webp" alt="Logo" width={140} height={42} className="object-contain mx-auto mb-4" />
+          <Image src="/logo.webp" alt="Logo" width={140} height={42} className="object-contain mx-auto mb-4" unoptimized />
           <div className="inline-flex items-center gap-2 bg-white/10 text-white rounded-full px-4 py-1.5 text-sm mb-3">
             <Monitor size={14} /> Step 2 of 3 – System Check
           </div>

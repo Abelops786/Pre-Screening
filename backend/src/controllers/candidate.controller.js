@@ -54,7 +54,8 @@ const submitJobApplication = async (req, res, next) => {
     if (!phone?.trim())    return error(res, 'Phone is required', 422);
     if (!location?.trim()) return error(res, 'Location is required', 422);
 
-    const job = await prisma.job.findUnique({ where: { id: jobId } });
+    // Support slug OR cuid in the URL
+    const job = await prisma.job.findFirst({ where: { OR: [{ id: jobId }, { slug: jobId }] } });
     if (!job || job.status !== 'PUBLISHED') return error(res, 'Job not found or not available', 404);
 
     // Sales: country auto-disqualifier

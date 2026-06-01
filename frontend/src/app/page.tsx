@@ -43,7 +43,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900">
       {/* Header */}
       <header className="max-w-5xl mx-auto px-6 py-8 flex items-center justify-between">
-        <Image src="/logo.webp" alt="Logo" width={160} height={48} className="object-contain" />
+        <Image src="/logo.webp" alt="Logo" width={160} height={48} className="object-contain" unoptimized />
         <a href="/login" className="text-sm text-brand-200 hover:text-white transition-colors">Admin Login</a>
       </header>
 
@@ -120,7 +120,7 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => router.push(`/jobs/${job.id}/apply`)}
+                    onClick={() => router.push(`/jobs/${job.urlKey || job.id}/apply`)}
                     className="shrink-0 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl px-5 py-2.5 transition-colors"
                   >
                     Apply Now

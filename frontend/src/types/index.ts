@@ -17,6 +17,8 @@ export type RoleType     = 'DEDICATED_HOURLY' | 'PER_MINUTE';
 
 export interface Job {
   id: string;
+  slug?: string | null;
+  urlKey?: string;
   title: string;
   department: Department;
   status: JobStatus;

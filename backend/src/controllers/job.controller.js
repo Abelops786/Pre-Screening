@@ -1,6 +1,22 @@
 const prisma = require('../config/database');
 const { success, error } = require('../utils/responseHelper');
 
+const generateSlug = async (title) => {
+  const base = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 50);
+  let slug = base;
+  let attempt = 0;
+  while (await prisma.job.findUnique({ where: { slug } })) {
+    attempt++;
+    slug = `${base}-${attempt}`;
+  }
+  return slug;
+};
+
 // Auto-publish any scheduled jobs whose time has passed
 const autoPublishScheduled = async () => {
   await prisma.job.updateMany({
@@ -44,17 +60,17 @@ const listPublishedJobs = async (req, res, next) => {
     const jobs = await prisma.job.findMany({
       where: { status: 'PUBLISHED' },
       select: {
-        id: true, title: true, department: true, description: true,
+        id: true, slug: true, title: true, department: true, description: true,
         positionType: true, roleType: true, client: true,
         minDownloadSpeed: true, minUploadSpeed: true, createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });
-    // Attach work window for interpretation jobs (no client name exposed)
     const mapped = jobs.map((j) => ({
       ...j,
+      urlKey: j.slug || j.id,
       workWindow: j.client ? CLIENT_WORK_WINDOWS[j.client]?.window : null,
-      client: undefined, // strip client name from public response
+      client: undefined,
     }));
     return success(res, mapped);
   } catch (err) {
@@ -79,10 +95,12 @@ const getJob = async (req, res, next) => {
 const getPublicJob = async (req, res, next) => {
   try {
     await autoPublishScheduled();
-    const job = await prisma.job.findUnique({
-      where: { id: req.params.id },
+    const param = req.params.id;
+    // Support lookup by slug OR by CUID id
+    const job = await prisma.job.findFirst({
+      where: { OR: [{ id: param }, { slug: param }] },
       select: {
-        id: true, title: true, department: true, description: true,
+        id: true, slug: true, title: true, department: true, description: true,
         status: true, positionType: true, roleType: true,
         minDownloadSpeed: true, minUploadSpeed: true, client: true,
       },
@@ -90,6 +108,7 @@ const getPublicJob = async (req, res, next) => {
     if (!job || job.status !== 'PUBLISHED') return error(res, 'Job not found', 404);
     const result = {
       ...job,
+      urlKey: job.slug || job.id,
       workWindow: job.client ? CLIENT_WORK_WINDOWS[job.client]?.window : null,
       client: undefined,
     };
@@ -114,9 +133,11 @@ const createJob = async (req, res, next) => {
       return error(res, 'Scheduled publish date is required for scheduled jobs', 422);
     }
 
+    const slug = await generateSlug(title.trim());
     const job = await prisma.job.create({
       data: {
         title: title.trim(),
+        slug,
         department,
         status: status || 'DRAFT',
         scheduledPublishAt: scheduledPublishAt ? new Date(scheduledPublishAt) : null,
@@ -128,7 +149,7 @@ const createJob = async (req, res, next) => {
         minUploadSpeed: minUploadSpeed ?? 10,
       },
     });
-    return success(res, job, 'Job created', 201);
+    return success(res, { ...job, urlKey: job.slug || job.id }, 'Job created', 201);
   } catch (err) {
     next(err);
   }

@@ -38,7 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-brand-900 text-white flex flex-col transform transition-transform duration-200
       ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:z-auto`}>
       <div className="p-5 border-b border-brand-700 flex flex-col items-start gap-1">
-        <Image src="/logo.webp" alt="Logo" width={140} height={40} className="object-contain" />
+        <Image src="/logo.webp" alt="Logo" width={140} height={40} className="object-contain" unoptimized />
         <p className="text-xs text-brand-300">Admin Portal</p>
       </div>
 

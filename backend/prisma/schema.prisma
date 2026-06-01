@@ -95,6 +95,7 @@ model User {
 
 model Job {
   id                 String                @id @default(cuid())
+  slug               String?               @unique
   title              String
   department         Department
   status             JobStatus             @default(DRAFT)

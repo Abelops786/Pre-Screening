@@ -4,7 +4,7 @@ import api from '@/lib/api';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { Plus, Pencil, Trash2, Globe, Copy, Loader2, X, Check } from 'lucide-react';
-import type { Job, Department, JobStatus, InterpretationClient, PositionType, RoleType } from '@/types';
+import type { Job, Department, JobStatus, PositionType, RoleType } from '@/types';
 import {
   JOB_STATUS_LABELS, JOB_STATUS_COLORS, DEPT_LABELS, DEPT_COLORS,
 } from '@/types';
@@ -84,8 +84,9 @@ export default function JobsPage() {
     } catch { toast.error('Failed to update status'); }
   };
 
-  const copyLink = (id: string) => {
-    const url = `${window.location.origin}/jobs/${id}/apply`;
+  const copyLink = (j: Job) => {
+    const key = (j as Job & { slug?: string }).slug || j.id;
+    const url = `${window.location.origin}/jobs/${key}/apply`;
     navigator.clipboard.writeText(url);
     toast.success('Application link copied!');
   };
@@ -149,7 +150,7 @@ export default function JobsPage() {
                       )}
                       {j.status === 'PUBLISHED' && (
                         <>
-                          <button onClick={() => copyLink(j.id)}
+                          <button onClick={() => copyLink(j)}
                             className="inline-flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium">
                             <Copy size={13} /> Copy Link
                           </button>
