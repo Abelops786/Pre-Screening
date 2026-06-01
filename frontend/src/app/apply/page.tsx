@@ -73,8 +73,22 @@ export default function ApplyPage() {
       toast.success('Application submitted!');
       router.push(`/apply/system-check?id=${candidateId}`);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Submission failed. Please try again.';
-      toast.error(msg);
+      const res = (err as { response?: { data?: { message?: string; data?: { id: string; status: string } } } })?.response?.data;
+      if (res?.message === 'already_applied' && res?.data) {
+        const { id, status } = res.data;
+        if (status === 'PENDING' || status === 'SYSTEM_CHECK_FAILED') {
+          toast.info('Resuming your application — redirecting to system check…');
+          router.push(`/apply/system-check?id=${id}`);
+        } else if (status === 'AUDIO_PENDING') {
+          toast.info('Resuming your application — redirecting to audio recording…');
+          router.push(`/apply/audio?id=${id}`);
+        } else {
+          toast.info('Your application has already been submitted. Please check your email for updates.');
+          router.push('/apply/complete');
+        }
+        return;
+      }
+      toast.error(res?.message || 'Submission failed. Please try again.');
     } finally {
       setSubmitting(false);
     }

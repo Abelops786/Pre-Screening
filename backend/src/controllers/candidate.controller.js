@@ -34,7 +34,15 @@ const submit = async (req, res, next) => {
     return success(res, { candidateId: candidate.id }, 'Application submitted successfully', 201);
   } catch (err) {
     if (err.code === 'P2002') {
-      return error(res, 'This email address has already been used to apply. Please check your inbox for updates on your application status.', 409);
+      const existing = await prisma.candidate.findUnique({
+        where: { email: req.body.email },
+        select: { id: true, status: true },
+      });
+      return res.status(409).json({
+        success: false,
+        message: 'already_applied',
+        data: existing,
+      });
     }
     next(err);
   }
