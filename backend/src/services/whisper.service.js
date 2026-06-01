@@ -16,6 +16,22 @@ const getClient = () => {
   return openaiClient;
 };
 
+// Bug 1 fix: proper ISO-639-1 codes instead of naive slice(0,2)
+const LANGUAGE_ISO_MAP = {
+  english:    'en',
+  spanish:    'es',
+  arabic:     'ar',
+  hindi:      'hi',
+  urdu:       'ur',
+  french:     'fr',
+  german:     'de',
+  portuguese: 'pt',
+  mandarin:   'zh',
+  russian:    'ru',
+  turkish:    'tr',
+  indonesian: 'id',
+};
+
 /**
  * Compute a simple fluency score from a Whisper transcript.
  * Score is based on:
@@ -26,20 +42,25 @@ const getClient = () => {
 const computeFluencyScore = (transcript, durationHint = 90) => {
   if (!transcript || transcript.trim().length === 0) return 0;
 
-  const clean  = transcript.replace(/\[.*?\]/g, '').trim();
-  const words  = clean.split(/\s+/).filter(Boolean);
-  const unique = new Set(words.map((w) => w.toLowerCase()));
+  const clean = transcript.replace(/\[.*?\]/g, '').trim();
 
-  // Expect ~100-150 wpm for a natural speaker over the allotted time
-  const expectedWords    = durationHint * (120 / 60);
-  const wordCountScore   = Math.min(words.length / expectedWords, 1) * 50;
-  const diversityScore   = (unique.size / Math.max(words.length, 1)) * 30;
+  // Bug 3 fix: Mandarin uses characters not spaces — count characters instead of words
+  const isCJK = /[一-鿿]/.test(clean);
+  const tokens = isCJK
+    ? clean.replace(/\s+/g, '').split('')
+    : clean.split(/\s+/).filter(Boolean);
+  const unique = new Set(tokens.map((t) => t.toLowerCase()));
+
+  // CJK speakers produce ~300 chars/min vs ~120 words/min for others
+  const expectedCount  = isCJK ? durationHint * (300 / 60) : durationHint * (120 / 60);
+  const countScore     = Math.min(tokens.length / expectedCount, 1) * 50;
+  const diversityScore = (unique.size / Math.max(tokens.length, 1)) * 30;
 
   // Penalise for inaudible markers
   const markerCount    = (transcript.match(/\[.*?\]/g) || []).length;
   const clarityPenalty = Math.min(markerCount * 5, 20);
 
-  const raw = wordCountScore + diversityScore - clarityPenalty;
+  const raw = countScore + diversityScore - clarityPenalty;
   return Math.min(Math.max(Math.round(raw), 0), 100);
 };
 
@@ -80,20 +101,33 @@ const transcribe = async (audioBuffer, mimeType, selectedLanguage) => {
     temperature:      0,
   };
 
-  // Hint Whisper with the candidate's chosen language when known
+  // Bug 1 fix: use proper ISO-639-1 map instead of naive slice(0,2)
   const whisperLang = selectedLanguage?.toLowerCase();
   if (whisperLang && whisperLang !== 'other') {
-    params.language = whisperLang.slice(0, 2); // ISO-639-1 code
+    params.language = LANGUAGE_ISO_MAP[whisperLang] ?? whisperLang.slice(0, 2);
   }
 
   logger.info('Calling Whisper API', { language: params.language });
-  const response = await client.audio.transcriptions.create(params);
+  let response = await client.audio.transcriptions.create(params);
+
+  // Bug 2 fix: if Whisper returns only dots/whitespace, retry without the language
+  // hint so it auto-detects instead of forcing a language it struggles with
+  const isDotOnly = (text) => !text || /^[\s.……]+$/.test(text);
+  let usedFallback = false;
+  if (isDotOnly(response.text) && params.language) {
+    logger.warn('Whisper returned empty/dot transcript, retrying without language hint', { language: params.language });
+    const fallbackParams = { ...params };
+    delete fallbackParams.language;
+    response = await client.audio.transcriptions.create(fallbackParams);
+    usedFallback = true;
+  }
 
   const transcript = response.text || '';
   const fluencyScore = computeFluencyScore(transcript);
 
   const flaggedForHumanReview =
     isLowResource ||
+    usedFallback ||
     fluencyScore === 0 ||
     transcript.toLowerCase().includes('[blank_audio]') ||
     (response.segments || []).some((s) => s.no_speech_prob > 0.8);
