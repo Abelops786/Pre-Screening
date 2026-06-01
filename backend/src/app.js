@@ -30,6 +30,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve uploaded files before helmet so security headers don't block file viewing
+if (process.env.STORAGE_PROVIDER === 'local') {
+  app.use('/files', (req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  }, express.static(path.join(__dirname, '../uploads')));
+}
+
 app.use(helmet());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -49,11 +57,6 @@ app.use('/api/v1/candidates', rateLimit({
   max: 10,
   message: { error: 'Too many applications from this IP. Please try again later.' },
 }));
-
-// Serve locally uploaded files in dev
-if (process.env.STORAGE_PROVIDER === 'local') {
-  app.use('/files', express.static(path.join(__dirname, '../uploads')));
-}
 
 app.use('/api/v1', routes);
 
