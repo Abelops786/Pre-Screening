@@ -17,10 +17,7 @@ const submit = async (req, res, next) => {
 
     const candidate = await prisma.candidate.create({
       data: {
-        fullName,
-        email,
-        phone,
-        location,
+        fullName, email, phone, location,
         yearsExperience: parseInt(yearsExperience, 10),
         availabilityShift,
         certifications: certifications || [],
@@ -43,10 +40,33 @@ const submit = async (req, res, next) => {
   }
 };
 
+// ── Shared auto-assign helper ──────────────────────────────────
+const autoAssignRecruiter = async (jobDepartment, candidateId) => {
+  try {
+    const deptLabel = jobDepartment === 'CUSTOMER_SERVICE' ? 'Customer Service'
+      : jobDepartment === 'SALES' ? 'Sales'
+      : 'Interpretation';
+    const recruiter = await prisma.user.findFirst({
+      where: {
+        role: { in: ['RECRUITER', 'ADMIN'] },
+        department: { contains: deptLabel, mode: 'insensitive' },
+        isActive: true,
+      },
+    });
+    if (recruiter) {
+      await prisma.recruiterCandidateAssignment.upsert({
+        where: { recruiterId_candidateId: { recruiterId: recruiter.id, candidateId } },
+        create: { recruiterId: recruiter.id, candidateId },
+        update: {},
+      });
+    }
+  } catch (_) { /* non-blocking */ }
+};
+
 // ── New department-based job application submit ────────────────
 const submitJobApplication = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { jobId: jobParam } = req.params;
     const { fullName, email, phone, location, questionnaireAnswers, vocarooUrl } = req.body;
 
     if (!fullName?.trim()) return error(res, 'Full name is required', 422);
@@ -54,133 +74,124 @@ const submitJobApplication = async (req, res, next) => {
     if (!phone?.trim())    return error(res, 'Phone is required', 422);
     if (!location?.trim()) return error(res, 'Location is required', 422);
 
-    // Support slug OR cuid in the URL
-    const job = await prisma.job.findFirst({ where: { OR: [{ id: jobId }, { slug: jobId }] } });
+    // Support slug OR cuid in the URL — always use job.id for the FK
+    const job = await prisma.job.findFirst({ where: { OR: [{ id: jobParam }, { slug: jobParam }] } });
     if (!job || job.status !== 'PUBLISHED') return error(res, 'Job not found or not available', 404);
 
-    // Sales: country auto-disqualifier
-    if (job.department === 'SALES') {
-      const blockedCountries = ['jamaica', 'philippines', 'egypt'];
-      const country = (questionnaireAnswers?.country || '').toLowerCase();
-      const isAfrica = (questionnaireAnswers?.isAfrica === true);
-      if (blockedCountries.some((c) => country.includes(c)) || isAfrica) {
-        const candidate = await prisma.candidate.create({
-          data: {
-            fullName, email, phone, location,
-            department: job.department,
-            jobId,
-            questionnaireAnswers: questionnaireAnswers || {},
-            status: 'AUTO_DISQUALIFIED',
-            autoDisqualifyReason: 'Location not eligible for this campaign',
-            certifications: [],
-          },
-        });
-        return success(res, { candidateId: candidate.id, autoDisqualified: true, reason: candidate.autoDisqualifyReason }, 'Application received', 201);
-      }
-    }
+    const jobId = job.id; // Use the real DB id, never the slug
 
-    // Interpretation: ASL without RID cert auto-disqualifier
-    if (job.department === 'INTERPRETATION') {
-      const isASL = (questionnaireAnswers?.languagePair || '').toLowerCase().includes('asl');
-      const hasRID = questionnaireAnswers?.ridCertified === true;
-      if (isASL && !hasRID) {
-        const candidate = await prisma.candidate.create({
-          data: {
-            fullName, email, phone, location,
-            department: job.department,
-            jobId,
-            questionnaireAnswers: questionnaireAnswers || {},
-            status: 'AUTO_DISQUALIFIED',
-            autoDisqualifyReason: 'ASL role requires a valid RID certification',
-            certifications: [],
-          },
-        });
-        return success(res, { candidateId: candidate.id, autoDisqualified: true, reason: candidate.autoDisqualifyReason }, 'Application received', 201);
-      }
-
-      // U.S.-based position: must be in the U.S.
-      if (job.positionType === 'US_BASED' && questionnaireAnswers?.residesInUS === false) {
-        const candidate = await prisma.candidate.create({
-          data: {
-            fullName, email, phone, location,
-            department: job.department,
-            jobId,
-            questionnaireAnswers: questionnaireAnswers || {},
-            status: 'AUTO_DISQUALIFIED',
-            autoDisqualifyReason: 'U.S.-based position requires U.S. residency',
-            certifications: [],
-          },
-        });
-        return success(res, { candidateId: candidate.id, autoDisqualified: true, reason: candidate.autoDisqualifyReason }, 'Application received', 201);
-      }
-    }
-
-    const candidate = await prisma.candidate.create({
+    const createCandidate = (extraData = {}) => prisma.candidate.create({
       data: {
-        fullName,
-        email,
-        phone,
-        location,
+        fullName, email, phone, location,
+        department: job.department,
+        jobId,
+        vocarooUrl: vocarooUrl || null,
+        questionnaireAnswers: questionnaireAnswers || {},
+        certifications: [],
+        status: 'PENDING',
+        ...extraData,
+      },
+    });
+
+    const updateCandidateForNewJob = (existingId) => prisma.candidate.update({
+      where: { id: existingId },
+      data: {
+        fullName, phone, location,
         department: job.department,
         jobId,
         vocarooUrl: vocarooUrl || null,
         questionnaireAnswers: questionnaireAnswers || {},
         status: 'PENDING',
-        certifications: [],
+        autoDisqualifyReason: null,
       },
     });
 
-    // Auto-assign to recruiter whose department matches
-    try {
-      const deptLabel = job.department === 'CUSTOMER_SERVICE' ? 'Customer Service'
-        : job.department === 'SALES' ? 'Sales'
-        : 'Interpretation';
-      const recruiter = await prisma.user.findFirst({
-        where: {
-          role: { in: ['RECRUITER', 'ADMIN'] },
-          department: { contains: deptLabel, mode: 'insensitive' },
-          isActive: true,
-        },
-      });
-      if (recruiter) {
-        await prisma.recruiterCandidateAssignment.create({
-          data: { recruiterId: recruiter.id, candidateId: candidate.id },
+    // ── Auto-disqualifiers ───────────────────────────────────
+    if (job.department === 'SALES') {
+      const blockedCountries = ['jamaica', 'philippines', 'egypt'];
+      const country = (questionnaireAnswers?.country || '').toLowerCase();
+      const isAfrica = questionnaireAnswers?.isAfrica === true;
+      if (blockedCountries.some((c) => country.includes(c)) || isAfrica) {
+        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'Location not eligible for this campaign' }).catch(async (e) => {
+          if (e.code === 'P2002') {
+            const ex = await prisma.candidate.findUnique({ where: { email } });
+            return updateCandidateForNewJob(ex.id).then((u) => ({ ...u, autoDisqualifyReason: 'Location not eligible for this campaign' }));
+          }
+          throw e;
         });
+        return success(res, { candidateId: c.id, autoDisqualified: true, reason: 'Location not eligible for this campaign' }, 'Application received', 201);
       }
-    } catch (_) { /* non-blocking */ }
+    }
 
+    if (job.department === 'INTERPRETATION') {
+      const isASL = (questionnaireAnswers?.languagePair || '').toLowerCase().includes('asl');
+      if (isASL && questionnaireAnswers?.ridCertified !== 'Yes') {
+        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'ASL role requires a valid RID certification' }).catch(async (e) => {
+          if (e.code === 'P2002') {
+            const ex = await prisma.candidate.findUnique({ where: { email } });
+            return updateCandidateForNewJob(ex.id).then((u) => ({ ...u, autoDisqualifyReason: 'ASL role requires a valid RID certification' }));
+          }
+          throw e;
+        });
+        return success(res, { candidateId: c.id, autoDisqualified: true, reason: 'ASL role requires a valid RID certification' }, 'Application received', 201);
+      }
+
+      if (job.positionType === 'US_BASED' && questionnaireAnswers?.residesInUS === 'No') {
+        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'U.S.-based position requires U.S. residency' }).catch(async (e) => {
+          if (e.code === 'P2002') {
+            const ex = await prisma.candidate.findUnique({ where: { email } });
+            return updateCandidateForNewJob(ex.id).then((u) => ({ ...u, autoDisqualifyReason: 'U.S.-based position requires U.S. residency' }));
+          }
+          throw e;
+        });
+        return success(res, { candidateId: c.id, autoDisqualified: true, reason: 'U.S.-based position requires U.S. residency' }, 'Application received', 201);
+      }
+    }
+
+    // ── Create candidate (or update existing if same email) ──
+    let candidate;
+    try {
+      candidate = await createCandidate();
+    } catch (e) {
+      if (e.code === 'P2002') {
+        // Same email already in DB — update their record for this new job application
+        const existing = await prisma.candidate.findUnique({ where: { email } });
+        if (!existing) throw e;
+
+        // If same job, resume instead of overwriting
+        if (existing.jobId === jobId) {
+          return res.status(409).json({ success: false, message: 'already_applied', data: { id: existing.id, status: existing.status, jobId: existing.jobId } });
+        }
+
+        // Different job (or original flow with no jobId) — overwrite with new application
+        candidate = await updateCandidateForNewJob(existing.id);
+      } else {
+        throw e;
+      }
+    }
+
+    await autoAssignRecruiter(job.department, candidate.id);
     emailService.sendConfirmation(candidate).catch(() => {});
     return success(res, { candidateId: candidate.id, autoDisqualified: false }, 'Application submitted successfully', 201);
   } catch (err) {
-    if (err.code === 'P2002') {
-      const existing = await prisma.candidate.findUnique({
-        where: { email: req.body.email },
-        select: { id: true, status: true, jobId: true },
-      });
-      return res.status(409).json({ success: false, message: 'already_applied', data: existing });
-    }
     next(err);
   }
 };
 
-// ── Original system check (kept intact) ───────────────────────
+// ── System check ───────────────────────────────────────────────
 const saveSystemCheck = async (req, res, next) => {
   try {
     const { id: candidateId } = req.params;
-    const {
-      downloadSpeed, uploadSpeed,
-      deviceType, os, browser,
-      micPermitted, speakerPermitted,
-    } = req.body;
+    const { downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted } = req.body;
 
     const candidate = await prisma.candidate.findUnique({
       where: { id: candidateId },
       select: { jobId: true },
     });
 
-    // Use job-specific thresholds if available, else fall back to env vars
     let minDownload = parseFloat(process.env.MIN_DOWNLOAD_SPEED_MBPS || '5');
     let minUpload   = parseFloat(process.env.MIN_UPLOAD_SPEED_MBPS   || '2');
+
     if (candidate?.jobId) {
       const job = await prisma.job.findUnique({
         where: { id: candidate.jobId },
@@ -200,10 +211,13 @@ const saveSystemCheck = async (req, res, next) => {
       update: { downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted, passed },
     });
 
-    await prisma.candidate.update({
-      where: { id: candidateId },
-      data:  { status: passed ? 'AUDIO_PENDING' : 'SYSTEM_CHECK_FAILED' },
-    });
+    // For job-based candidates: questionnaire is the screening, so passing system check = Level 1 Passed
+    // For original flow candidates: need audio recording next
+    const nextStatus = passed
+      ? (candidate?.jobId ? 'LEVEL1_PASSED' : 'AUDIO_PENDING')
+      : 'SYSTEM_CHECK_FAILED';
+
+    await prisma.candidate.update({ where: { id: candidateId }, data: { status: nextStatus } });
 
     return success(res, { passed, check }, passed ? 'System check passed' : 'System check failed');
   } catch (err) {

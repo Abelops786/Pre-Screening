@@ -9,11 +9,13 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import {
   ArrowLeft, FileText, Mic, Wifi, Monitor, Loader2, Send,
-  CheckCircle, XCircle, AlertTriangle, Flag, Video,
+  CheckCircle, XCircle, AlertTriangle, Flag, Video, ClipboardList,
 } from 'lucide-react';
+import { DEPT_LABELS, DEPT_COLORS } from '@/types';
 
 const EDITABLE_STATUSES: CandidateStatus[] = [
-  'PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING', 'LEVEL1_PASSED', 'REJECTED',
+  'PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING',
+  'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED',
 ];
 
 export default function CandidateProfilePage() {
@@ -100,6 +102,17 @@ export default function CandidateProfilePage() {
   const sc = candidate.systemCheck;
   const ar = candidate.audioRecording;
   const fr = candidate.filterResult;
+  const qa = candidate.questionnaireAnswers;
+
+  // Format questionnaire answers for display — skip empty/array-empty/boolean-false values
+  const formatQAValue = (v: unknown): string => {
+    if (v === null || v === undefined || v === '') return '–';
+    if (Array.isArray(v)) return v.length ? v.join(', ') : '–';
+    if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+    return String(v);
+  };
+  const qaLabel = (key: string): string =>
+    key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim();
 
   const Section = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -139,15 +152,39 @@ export default function CandidateProfilePage() {
       {/* Personal Details */}
       <Section title="Personal Information" icon={<FileText size={18} />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
-          <Row label="Phone"              value={candidate.phone} />
-          <Row label="Location"           value={candidate.location} />
-          <Row label="Experience"         value={`${candidate.yearsExperience} year(s)`} />
-          <Row label="Shift"              value={candidate.availabilityShift} />
-          <Row label="Language"           value={<span className="capitalize">{candidate.selectedLanguage}</span>} />
-          <Row label="Certifications"     value={candidate.certifications.join(', ') || '–'} />
+          <Row label="Phone"    value={candidate.phone} />
+          <Row label="Location" value={candidate.location} />
+          {candidate.job ? (
+            <Row label="Position" value={
+              <div className="flex flex-col items-end gap-1">
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${DEPT_COLORS[candidate.job.department as keyof typeof DEPT_COLORS] ?? 'bg-gray-100 text-gray-600'}`}>
+                  {DEPT_LABELS[candidate.job.department as keyof typeof DEPT_LABELS] ?? candidate.job.department}
+                </span>
+                <span className="text-xs text-gray-500">{candidate.job.title}</span>
+              </div>
+            } />
+          ) : (
+            <>
+              <Row label="Experience"    value={`${candidate.yearsExperience ?? '–'} year(s)`} />
+              <Row label="Shift"         value={candidate.availabilityShift ?? '–'} />
+              <Row label="Language"      value={<span className="capitalize">{candidate.selectedLanguage ?? '–'}</span>} />
+              <Row label="Certifications" value={candidate.certifications.join(', ') || '–'} />
+            </>
+          )}
         </div>
-
-        {/* Documents */}
+        {candidate.vocarooUrl && (
+          <div className="mt-4">
+            <a href={candidate.vocarooUrl} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-700 border border-brand-200 hover:bg-brand-50 rounded-lg px-3 py-1.5 transition-colors">
+              🎙 Listen to Voice Recording
+            </a>
+          </div>
+        )}
+        {candidate.autoDisqualifyReason && (
+          <div className="mt-4 bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm text-rose-700">
+            <span className="font-semibold">Auto-disqualified:</span> {candidate.autoDisqualifyReason}
+          </div>
+        )}
         <div className="flex gap-3 mt-4 flex-wrap">
           {candidate.cvUrl && (
             <a href={candidate.cvUrl} target="_blank" rel="noreferrer"
@@ -163,6 +200,24 @@ export default function CandidateProfilePage() {
           )}
         </div>
       </Section>
+
+      {/* Questionnaire Answers (job-based candidates only) */}
+      {qa && Object.keys(qa).length > 0 && (
+        <Section title="Screening Questionnaire Answers" icon={<ClipboardList size={18} />}>
+          <div className="space-y-0 divide-y divide-gray-50">
+            {Object.entries(qa)
+              .filter(([, v]) => v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0))
+              .map(([key, value]) => (
+                <div key={key} className="flex items-start justify-between py-2 gap-4">
+                  <span className="text-sm text-gray-500 shrink-0 max-w-[45%]">{qaLabel(key)}</span>
+                  <span className="text-sm font-medium text-gray-900 text-right break-words max-w-[55%]">
+                    {formatQAValue(value)}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </Section>
+      )}
 
       {/* System Check */}
       <Section title="System Check" icon={<Monitor size={18} />}>

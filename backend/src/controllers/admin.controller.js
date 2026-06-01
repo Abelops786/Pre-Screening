@@ -38,7 +38,7 @@ const listCandidates = async (req, res, next) => {
   try {
     const {
       page = 1, limit = 20,
-      search, status, language,
+      search, status, language, department,
       sortBy = 'createdAt', sortOrder = 'desc',
     } = req.query;
 
@@ -49,8 +49,9 @@ const listCandidates = async (req, res, next) => {
         { email:    { contains: search, mode: 'insensitive' } },
       ];
     }
-    if (status)   where.status = status;
-    if (language) where.selectedLanguage = language;
+    if (status)     where.status = status;
+    if (language)   where.selectedLanguage = language;
+    if (department) where.department = department;
 
     // Recruiters only see their assigned candidates
     if (req.user.role === 'RECRUITER') {
@@ -60,7 +61,12 @@ const listCandidates = async (req, res, next) => {
     const [candidates, total] = await Promise.all([
       prisma.candidate.findMany({
         where,
-        include: { systemCheck: true, audioRecording: true, filterResult: true },
+        include: {
+          systemCheck: true,
+          audioRecording: true,
+          filterResult: true,
+          job: { select: { id: true, title: true, department: true } },
+        },
         orderBy: { [sortBy]: sortOrder },
         skip: (parseInt(page) - 1) * parseInt(limit),
         take: parseInt(limit),
