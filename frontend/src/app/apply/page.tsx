@@ -59,16 +59,14 @@ export default function ApplyPage() {
 
       const candidateId: string = data.data.candidateId;
 
-      // Upload documents skipped for demo
-      /*
-      const formData = new FormData();
-      formData.append('cv', cvFile);
-      if (certFile) formData.append('certificate', certFile);
-
-      await api.post(`/upload/${candidateId}/documents`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      */
+      if (cvFile || certFile) {
+        const formData = new FormData();
+        if (cvFile) formData.append('cv', cvFile);
+        if (certFile) formData.append('certificate', certFile);
+        await api.post(`/upload/${candidateId}/documents`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
 
       toast.success('Application submitted!');
       router.push(`/apply/system-check?id=${candidateId}`);
