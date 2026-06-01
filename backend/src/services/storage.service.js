@@ -23,7 +23,9 @@ const upload = async (buffer, originalName, mimeType, folder = 'uploads') => {
     const basename = path.basename(filename);
     fs.writeFileSync(path.join(uploadDir, basename), buffer);
     logger.info('File saved locally', { filename });
-    const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 4000}`;
+    const baseUrl = process.env.BACKEND_URL
+      || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null)
+      || `http://localhost:${process.env.PORT || 4000}`;
     return `${baseUrl}/files/${folder}/${basename}`;
   }
 

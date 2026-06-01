@@ -122,14 +122,17 @@ const transcribe = async (audioBuffer, mimeType, selectedLanguage) => {
     usedFallback = true;
   }
 
-  const transcript = response.text || '';
-  const fluencyScore = computeFluencyScore(transcript);
+  // If transcript is still just dots after fallback, treat as unreadable
+  const rawText = response.text || '';
+  const transcript = isDotOnly(rawText) ? null : rawText;
+  const fluencyScore = transcript ? computeFluencyScore(transcript) : null;
 
   const flaggedForHumanReview =
     isLowResource ||
     usedFallback ||
+    transcript === null ||
     fluencyScore === 0 ||
-    transcript.toLowerCase().includes('[blank_audio]') ||
+    (transcript?.toLowerCase().includes('[blank_audio]') ?? false) ||
     (response.segments || []).some((s) => s.no_speech_prob > 0.8);
 
   return {
