@@ -33,6 +33,9 @@ const submit = async (req, res, next) => {
 
     return success(res, { candidateId: candidate.id }, 'Application submitted successfully', 201);
   } catch (err) {
+    if (err.code === 'P2002') {
+      return error(res, 'This email address has already been used to apply. Please check your inbox for updates on your application status.', 409);
+    }
     next(err);
   }
 };
