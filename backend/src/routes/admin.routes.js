@@ -6,8 +6,8 @@ const { isAdmin, isSuperAdmin, isRecruiter } = require('../middleware/rbac.middl
 // All admin routes require authentication
 router.use(authenticate);
 
-// Analytics (Admin+)
-router.get('/analytics', isAdmin, adminController.getAnalytics);
+// Analytics (all roles — filtered per role inside controller)
+router.get('/analytics', isRecruiter, adminController.getAnalytics);
 
 // Candidate management (Admin+)
 router.get('/candidates',              isAdmin, adminController.listCandidates);

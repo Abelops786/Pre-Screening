@@ -12,22 +12,30 @@ const CANDIDATE_INCLUDE = {
   interviews: { orderBy: { createdAt: 'desc' }, take: 1 },
 };
 
-const getAnalytics = async (_req, res, next) => {
+const getAnalytics = async (req, res, next) => {
   try {
-    const [total, qualified, rejected, pending, languageBreakdown] = await Promise.all([
-      prisma.candidate.count(),
-      prisma.candidate.count({ where: { status: 'LEVEL1_PASSED' } }),
-      prisma.candidate.count({ where: { status: 'REJECTED' } }),
-      prisma.candidate.count({ where: { status: { in: ['PENDING', 'AUDIO_PENDING', 'PROCESSING'] } } }),
-      prisma.candidate.groupBy({ by: ['selectedLanguage'], _count: { id: true } }),
+    // For RECRUITER: only count their assigned candidates
+    const recruiterFilter = req.user.role === 'RECRUITER'
+      ? { assignedRecruiters: { some: { recruiterId: req.user.id } } }
+      : {};
+
+    const [total, qualified, rejected, pending, deptBreakdown] = await Promise.all([
+      prisma.candidate.count({ where: recruiterFilter }),
+      prisma.candidate.count({ where: { ...recruiterFilter, status: 'LEVEL1_PASSED' } }),
+      prisma.candidate.count({ where: { ...recruiterFilter, status: 'REJECTED' } }),
+      prisma.candidate.count({ where: { ...recruiterFilter, status: { in: ['PENDING', 'AUDIO_PENDING', 'PROCESSING'] } } }),
+      prisma.candidate.groupBy({ by: ['department'], where: { ...recruiterFilter, department: { not: null } }, _count: { id: true } }),
     ]);
+
+    // Language breakdown for original-flow candidates
+    const languageBreakdown = req.user.role !== 'RECRUITER'
+      ? await prisma.candidate.groupBy({ by: ['selectedLanguage'], where: { selectedLanguage: { not: null } }, _count: { id: true } })
+      : [];
 
     return success(res, {
       kpi: { total, qualified, rejected, pending },
-      languageBreakdown: languageBreakdown.map((l) => ({
-        language: l.selectedLanguage,
-        count: l._count.id,
-      })),
+      deptBreakdown: deptBreakdown.map((d) => ({ department: d.department, count: d._count.id })),
+      languageBreakdown: languageBreakdown.map((l) => ({ language: l.selectedLanguage, count: l._count.id })),
     });
   } catch (err) {
     next(err);

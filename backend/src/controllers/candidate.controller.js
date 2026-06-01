@@ -211,11 +211,7 @@ const saveSystemCheck = async (req, res, next) => {
       update: { downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted, passed },
     });
 
-    // For job-based candidates: questionnaire is the screening, so passing system check = Level 1 Passed
-    // For original flow candidates: need audio recording next
-    const nextStatus = passed
-      ? (candidate?.jobId ? 'LEVEL1_PASSED' : 'AUDIO_PENDING')
-      : 'SYSTEM_CHECK_FAILED';
+    const nextStatus = passed ? 'AUDIO_PENDING' : 'SYSTEM_CHECK_FAILED';
 
     await prisma.candidate.update({ where: { id: candidateId }, data: { status: nextStatus } });
 
