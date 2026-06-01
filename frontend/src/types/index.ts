@@ -56,6 +56,12 @@ export interface InternalNote {
   user: { id: string; name: string };
 }
 
+export interface Interview {
+  id: string;
+  msTeamsLink: string | null;
+  scheduledTime: string;
+}
+
 export interface Candidate {
   id: string;
   fullName: string;
@@ -74,6 +80,7 @@ export interface Candidate {
   audioRecording?: AudioRecording | null;
   filterResult?: FilterResult | null;
   internalNotes?: InternalNote[];
+  interviews?: Interview[];
 }
 
 export interface AnalyticsData {

@@ -9,7 +9,7 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import {
   ArrowLeft, FileText, Mic, Wifi, Monitor, Loader2, Send,
-  CheckCircle, XCircle, AlertTriangle, Flag,
+  CheckCircle, XCircle, AlertTriangle, Flag, Video,
 } from 'lucide-react';
 
 const EDITABLE_STATUSES: CandidateStatus[] = [
@@ -27,6 +27,8 @@ export default function CandidateProfilePage() {
   const [noteText,  setNoteText]  = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [statusChanging, setStatusChanging] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [teamsLink, setTeamsLink] = useState<string | null>(null);
 
   const fetchCandidate = async () => {
     try {
@@ -40,7 +42,29 @@ export default function CandidateProfilePage() {
     }
   };
 
-  useEffect(() => { fetchCandidate(); }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetchCandidate();
+  }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (candidate?.interviews?.[0]?.msTeamsLink) {
+      setTeamsLink(candidate.interviews[0].msTeamsLink);
+    }
+  }, [candidate]);
+
+  const generateTeamsLink = async () => {
+    setGeneratingLink(true);
+    try {
+      const { data } = await api.post(`/admin/candidates/${candidateId}/generate-teams-link`);
+      setTeamsLink(data.data.teamsLink);
+      toast.success('Teams meeting link generated!');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg || 'Failed to generate Teams link');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
 
   const handleStatusChange = async (status: string) => {
     setStatusChanging(true);
@@ -198,6 +222,45 @@ export default function CandidateProfilePage() {
             <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
               {fr.rejectionReasons.map((r, i) => <li key={i}>{r}</li>)}
             </ul>
+          )}
+        </Section>
+      )}
+
+      {/* Teams Meeting Link (Admin+, Level 1 Passed only) */}
+      {currentUser && ['SUPER_ADMIN', 'ADMIN'].includes(currentUser.role) && candidate.status === 'LEVEL1_PASSED' && (
+        <Section title="Microsoft Teams Interview" icon={<Video size={18} />}>
+          {teamsLink ? (
+            <div className="space-y-3">
+              <a
+                href={teamsLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+              >
+                <Video size={15} /> Join Teams Meeting
+              </a>
+              <p className="text-xs text-gray-400 break-all">{teamsLink}</p>
+              <button
+                onClick={generateTeamsLink}
+                disabled={generatingLink}
+                className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 underline"
+              >
+                {generatingLink ? <Loader2 size={13} className="animate-spin" /> : null}
+                Regenerate link
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <button
+                onClick={generateTeamsLink}
+                disabled={generatingLink}
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+              >
+                {generatingLink ? <Loader2 size={15} className="animate-spin" /> : <Video size={15} />}
+                {generatingLink ? 'Generating…' : 'Generate Teams Link'}
+              </button>
+              <p className="text-sm text-gray-400">No meeting link yet.</p>
+            </div>
           )}
         </Section>
       )}

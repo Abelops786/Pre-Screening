@@ -15,6 +15,9 @@ router.get('/candidates/:id',          isRecruiter, adminController.getCandidate
 router.patch('/candidates/:id/status', isAdmin, adminController.updateStatus);
 router.post('/candidates/:id/assign',  isAdmin, adminController.assignRecruiter);
 
+// Generate Teams meeting link for a Level 1 passed candidate (Admin+)
+router.post('/candidates/:id/generate-teams-link', isAdmin, adminController.generateTeamsLink);
+
 // Internal notes (any role)
 router.post('/candidates/:id/notes',   isRecruiter, adminController.addNote);
 router.get('/candidates/:id/notes',    isRecruiter, adminController.getNotes);

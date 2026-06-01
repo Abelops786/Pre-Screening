@@ -1,4 +1,5 @@
 const prisma = require('../config/database');
+const msService = require('../services/microsoft.service');
 const { success, error } = require('../utils/responseHelper');
 
 const CANDIDATE_INCLUDE = {
@@ -7,6 +8,7 @@ const CANDIDATE_INCLUDE = {
   filterResult: true,
   assignedRecruiters: { include: { recruiter: { select: { id: true, name: true, email: true } } } },
   internalNotes: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
+  interviews: { orderBy: { createdAt: 'desc' }, take: 1 },
 };
 
 const getAnalytics = async (_req, res, next) => {
@@ -180,4 +182,43 @@ const exportCsv = async (req, res, next) => {
   }
 };
 
-module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, assignRecruiter, addNote, getNotes, exportCsv };
+const generateTeamsLink = async (req, res, next) => {
+  try {
+    const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
+    if (!candidate) return error(res, 'Candidate not found', 404);
+    if (candidate.status !== 'LEVEL1_PASSED') return error(res, 'Candidate has not passed Level 1', 422);
+
+    const admin = await prisma.user.findFirst({
+      where: { role: 'SUPER_ADMIN', msAccessToken: { not: null } },
+    });
+    if (!admin?.msAccessToken) {
+      return error(res, 'Microsoft account not connected. Go to Settings and click Connect Microsoft.', 503);
+    }
+
+    const meeting = await msService.createOnlineMeeting(
+      admin.msAccessToken,
+      `TalentScreen Interview – ${candidate.fullName}`,
+    );
+    const teamsLink = meeting.joinWebUrl || meeting.joinUrl;
+
+    const existing = await prisma.interview.findFirst({ where: { candidateId: req.params.id } });
+    if (existing) {
+      await prisma.interview.update({ where: { id: existing.id }, data: { msTeamsLink: teamsLink } });
+    } else {
+      await prisma.interview.create({
+        data: {
+          candidateId: req.params.id,
+          recruiterId: admin.id,
+          scheduledTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          msTeamsLink: teamsLink,
+        },
+      });
+    }
+
+    return success(res, { teamsLink }, 'Teams meeting link generated');
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, assignRecruiter, addNote, getNotes, exportCsv, generateTeamsLink };
