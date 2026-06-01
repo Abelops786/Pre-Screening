@@ -54,8 +54,16 @@ const acquireTokenByCode = async (code) => {
 
 const createOnlineMeeting = async (accessToken, subject) => {
   const client = getGraphClient(accessToken);
+
+  // startDateTime = 1 week from now, endDateTime = 1 week + 1 hour
+  // Both are required by the Graph API
+  const start = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const end   = new Date(start.getTime() + 60 * 60 * 1000);
+
   const meeting = {
-    subject: subject || 'TalentScreen Interview',
+    subject:       subject || 'TalentScreen Interview',
+    startDateTime: start.toISOString(),
+    endDateTime:   end.toISOString(),
   };
 
   try {
