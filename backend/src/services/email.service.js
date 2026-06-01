@@ -104,12 +104,21 @@ const sendRejection = async (candidate, reasons = []) => {
   return send(candidate.email, 'Application Update – TalentScreen', html, candidate.id, 'rejection');
 };
 
-const sendLevel1Pass = async (candidate) => {
+const sendLevel1Pass = async (candidate, teamsLink = null) => {
+  const meetingSection = teamsLink
+    ? `<p style="margin-top:16px">Your interview has been scheduled. Please join using the link below:</p>
+       <p style="margin:16px 0">
+         <a href="${teamsLink}" style="display:inline-block;background:#1d4ed8;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">
+           Join Microsoft Teams Interview
+         </a>
+       </p>`
+    : `<p style="margin-top:16px">A member of our recruitment team will be in touch shortly to schedule the next stage of the process.</p>`;
+
   const html = base(`
     <p>Dear <strong>${candidate.fullName}</strong>,</p>
     <p>We are pleased to inform you that you have <strong>successfully passed Level 1</strong> of our screening process!</p>
     <span class="badge-pass">Level 1 Passed ✓</span>
-    <p style="margin-top:16px">A member of our recruitment team will be in touch shortly to schedule the next stage of the process.</p>
+    ${meetingSection}
     <p>Please ensure you remain available and check your inbox regularly.</p>
     <p>Best regards,<br>The Recruitment Team</p>
   `);
