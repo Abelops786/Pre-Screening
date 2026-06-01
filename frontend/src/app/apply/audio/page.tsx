@@ -43,7 +43,11 @@ function AudioContent() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : 'audio/ogg';
 
       const mr = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mr;
@@ -58,7 +62,7 @@ function AudioContent() {
         setPhase('recorded');
       };
 
-      mr.start(1000);
+      mr.start(250);
       setPhase('recording');
       setElapsed(0);
 
@@ -78,8 +82,10 @@ function AudioContent() {
 
   const stopRecording = () => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (mediaRecorderRef.current?.state !== 'inactive') {
-      mediaRecorderRef.current?.stop();
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== 'inactive') {
+      mr.requestData(); // flush last chunk before stopping
+      mr.stop();
     }
   };
 

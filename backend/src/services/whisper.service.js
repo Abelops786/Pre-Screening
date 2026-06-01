@@ -90,6 +90,7 @@ const transcribe = async (audioBuffer, mimeType, selectedLanguage) => {
   const ext = mimeType.includes('ogg') ? 'ogg'
     : mimeType.includes('wav')  ? 'wav'
     : mimeType.includes('mpeg') || mimeType.includes('mp3') ? 'mp3'
+    : mimeType.includes('mp4') ? 'mp4'
     : 'webm';
 
   const file = await toFile(audioBuffer, `audio.${ext}`, { type: mimeType });
