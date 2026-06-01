@@ -182,6 +182,15 @@ const exportCsv = async (req, res, next) => {
   }
 };
 
+const deleteCandidate = async (req, res, next) => {
+  try {
+    await prisma.candidate.delete({ where: { id: req.params.id } });
+    return success(res, {}, 'Candidate deleted');
+  } catch (err) {
+    next(err);
+  }
+};
+
 const generateTeamsLink = async (req, res, next) => {
   try {
     const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id } });
@@ -221,4 +230,4 @@ const generateTeamsLink = async (req, res, next) => {
   }
 };
 
-module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, assignRecruiter, addNote, getNotes, exportCsv, generateTeamsLink };
+module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, assignRecruiter, deleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink };

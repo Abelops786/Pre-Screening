@@ -13,6 +13,7 @@ router.get('/analytics', isAdmin, adminController.getAnalytics);
 router.get('/candidates',              isAdmin, adminController.listCandidates);
 router.get('/candidates/:id',          isRecruiter, adminController.getCandidate);
 router.patch('/candidates/:id/status', isAdmin, adminController.updateStatus);
+router.delete('/candidates/:id',       isAdmin, adminController.deleteCandidate);
 router.post('/candidates/:id/assign',  isAdmin, adminController.assignRecruiter);
 
 // Generate Teams meeting link for a Level 1 passed candidate (Admin+)

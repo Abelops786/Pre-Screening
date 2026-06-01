@@ -4,7 +4,8 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import type { Candidate, CandidateStatus } from '@/types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/types';
-import { Search, Download, ChevronLeft, ChevronRight, Loader2, Eye } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { Search, Download, ChevronLeft, ChevronRight, Loader2, Eye, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const ALL_STATUSES: CandidateStatus[] = [
@@ -40,6 +41,17 @@ export default function CandidatesPage() {
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
   useEffect(() => { setPage(1); }, [search, status]);
+
+  const deleteCandidate = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/admin/candidates/${id}`);
+      toast.success(`${name} deleted`);
+      fetchCandidates();
+    } catch {
+      toast.error('Failed to delete candidate');
+    }
+  };
 
   const exportCsv = async () => {
     const res = await api.get('/admin/candidates/export/csv', { responseType: 'blob' });
@@ -118,9 +130,17 @@ export default function CandidatesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <Link href={`/admin/candidates/${c.id}`} className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700 text-xs font-medium">
-                      <Eye size={14} /> View
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <Link href={`/admin/candidates/${c.id}`} className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700 text-xs font-medium">
+                        <Eye size={14} /> View
+                      </Link>
+                      <button
+                        onClick={() => deleteCandidate(c.id, c.fullName)}
+                        className="inline-flex items-center gap-1 text-red-500 hover:text-red-700 text-xs font-medium"
+                      >
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
