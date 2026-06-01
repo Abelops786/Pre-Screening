@@ -6,6 +6,7 @@ const CANDIDATE_INCLUDE = {
   systemCheck: true,
   audioRecording: true,
   filterResult: true,
+  job: { select: { id: true, title: true, department: true, client: true, positionType: true, roleType: true } },
   assignedRecruiters: { include: { recruiter: { select: { id: true, name: true, email: true } } } },
   internalNotes: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
   interviews: { orderBy: { createdAt: 'desc' }, take: 1 },

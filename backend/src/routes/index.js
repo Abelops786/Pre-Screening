@@ -5,6 +5,7 @@ router.use('/candidates', require('./candidate.routes'));
 router.use('/upload',     require('./upload.routes'));
 router.use('/audio',      require('./audio.routes'));
 router.use('/admin',      require('./admin.routes'));
+router.use('/jobs',       require('./job.routes'));
 // Stage 2 stubs – wired but not implemented until MS credentials are provided
 router.use('/recruiter',  require('./stage2.routes'));
 router.use('/interviews', require('./stage2.routes'));

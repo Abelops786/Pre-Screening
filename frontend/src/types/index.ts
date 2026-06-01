@@ -6,7 +6,31 @@ export type CandidateStatus =
   | 'AUDIO_PENDING'
   | 'PROCESSING'
   | 'LEVEL1_PASSED'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'AUTO_DISQUALIFIED';
+
+export type Department = 'INTERPRETATION' | 'SALES' | 'CUSTOMER_SERVICE';
+export type JobStatus  = 'DRAFT' | 'PENDING' | 'SCHEDULED' | 'PUBLISHED' | 'ARCHIVED';
+export type InterpretationClient = 'BIG_LANGUAGE' | 'TRANSPERFECT' | 'LANGO' | 'BOOSTLINGO';
+export type PositionType = 'US_BASED' | 'INTERNATIONAL';
+export type RoleType     = 'DEDICATED_HOURLY' | 'PER_MINUTE';
+
+export interface Job {
+  id: string;
+  title: string;
+  department: Department;
+  status: JobStatus;
+  scheduledPublishAt?: string | null;
+  client?: InterpretationClient | null;
+  positionType?: PositionType | null;
+  roleType?: RoleType | null;
+  description?: string | null;
+  minDownloadSpeed: number;
+  minUploadSpeed: number;
+  workWindow?: string | null;
+  createdAt: string;
+  _count?: { candidates: number };
+}
 
 export interface User {
   id: string;
@@ -134,6 +158,7 @@ export const STATUS_LABELS: Record<CandidateStatus, string> = {
   PROCESSING:           'Processing',
   LEVEL1_PASSED:        'Level 1 Passed',
   REJECTED:             'Rejected',
+  AUTO_DISQUALIFIED:    'Auto Disqualified',
 };
 
 export const STATUS_COLORS: Record<CandidateStatus, string> = {
@@ -143,4 +168,42 @@ export const STATUS_COLORS: Record<CandidateStatus, string> = {
   PROCESSING:           'bg-purple-100 text-purple-700',
   LEVEL1_PASSED:        'bg-green-100 text-green-700',
   REJECTED:             'bg-red-100 text-red-700',
+  AUTO_DISQUALIFIED:    'bg-rose-100 text-rose-700',
 };
+
+export const DEPT_LABELS: Record<Department, string> = {
+  INTERPRETATION:   'Interpretation',
+  SALES:            'Sales',
+  CUSTOMER_SERVICE: 'Customer Service',
+};
+
+export const DEPT_COLORS: Record<Department, string> = {
+  INTERPRETATION:   'bg-indigo-100 text-indigo-700',
+  SALES:            'bg-amber-100 text-amber-700',
+  CUSTOMER_SERVICE: 'bg-teal-100 text-teal-700',
+};
+
+export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
+  DRAFT:     'Draft',
+  PENDING:   'Pending Review',
+  SCHEDULED: 'Scheduled',
+  PUBLISHED: 'Published',
+  ARCHIVED:  'Archived',
+};
+
+export const JOB_STATUS_COLORS: Record<JobStatus, string> = {
+  DRAFT:     'bg-gray-100 text-gray-600',
+  PENDING:   'bg-yellow-100 text-yellow-700',
+  SCHEDULED: 'bg-blue-100 text-blue-700',
+  PUBLISHED: 'bg-green-100 text-green-700',
+  ARCHIVED:  'bg-slate-100 text-slate-500',
+};
+
+export const INTERPRETATION_LANGUAGES = [
+  'Acholi','Afrikaans','Albanian','Arabic','ASL','Azerbaijani','Bengali',
+  'Burmese','Cambodian (Khmer)','Cantonese','French','French US Based',
+  'Gujarati','Haitian Creole','Hindi','Hmong','Korean','Laotian','Lingala',
+  'Mandarin','Marshallese','Pashto','Portuguese','Rohingya','Russian',
+  'Slovenian','Somali','Spanish','Swahili','Tagalog','Turkish','Ukrainian',
+  'Urdu','Vietnamese','Wolof',
+];

@@ -2,18 +2,20 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { getStoredUser, clearAuth } from '@/lib/auth';
 import type { User } from '@/types';
 import {
   LayoutDashboard, Users, UserCircle, LogOut,
-  Menu, X, ChevronRight, Settings,
+  Menu, X, ChevronRight, Settings, Briefcase,
 } from 'lucide-react';
 
 const navItems = [
-  { href: '/admin',            label: 'Overview',    icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'RECRUITER'] },
-  { href: '/admin/candidates', label: 'Candidates',  icon: Users,           roles: ['SUPER_ADMIN', 'ADMIN', 'RECRUITER'] },
-  { href: '/admin/users',      label: 'User Management', icon: UserCircle,  roles: ['SUPER_ADMIN'] },
-  { href: '/admin/settings',   label: 'Settings',    icon: Settings,  roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { href: '/admin',            label: 'Overview',        icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'RECRUITER'] },
+  { href: '/admin/jobs',       label: 'Jobs',            icon: Briefcase,       roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { href: '/admin/candidates', label: 'Candidates',      icon: Users,           roles: ['SUPER_ADMIN', 'ADMIN', 'RECRUITER'] },
+  { href: '/admin/users',      label: 'User Management', icon: UserCircle,      roles: ['SUPER_ADMIN'] },
+  { href: '/admin/settings',   label: 'Settings',        icon: Settings,        roles: ['SUPER_ADMIN', 'ADMIN'] },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -35,9 +37,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const Sidebar = () => (
     <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-brand-900 text-white flex flex-col transform transition-transform duration-200
       ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:z-auto`}>
-      <div className="p-5 border-b border-brand-700">
-        <p className="text-lg font-bold">{process.env.NEXT_PUBLIC_APP_NAME || 'TalentScreen'}</p>
-        <p className="text-xs text-brand-300 mt-0.5">Admin Portal</p>
+      <div className="p-5 border-b border-brand-700 flex flex-col items-start gap-1">
+        <Image src="/logo.webp" alt="Logo" width={140} height={40} className="object-contain" />
+        <p className="text-xs text-brand-300">Admin Portal</p>
       </div>
 
       <nav className="flex-1 p-4 space-y-1">

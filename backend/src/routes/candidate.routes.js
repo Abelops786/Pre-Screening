@@ -19,4 +19,7 @@ router.post('/', submitValidation, candidateController.submit);
 // Public endpoint – save system check results for a candidate session
 router.post('/:id/system-check', candidateController.saveSystemCheck);
 
+// Public endpoint – job-based department application
+router.post('/job/:jobId', candidateController.submitJobApplication);
+
 module.exports = router;

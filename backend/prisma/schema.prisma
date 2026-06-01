@@ -24,6 +24,38 @@ enum CandidateStatus {
   PROCESSING
   LEVEL1_PASSED
   REJECTED
+  AUTO_DISQUALIFIED
+}
+
+enum Department {
+  INTERPRETATION
+  SALES
+  CUSTOMER_SERVICE
+}
+
+enum JobStatus {
+  DRAFT
+  PENDING
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum InterpretationClient {
+  BIG_LANGUAGE
+  TRANSPERFECT
+  LANGO
+  BOOSTLINGO
+}
+
+enum PositionType {
+  US_BASED
+  INTERNATIONAL
+}
+
+enum RoleType {
+  DEDICATED_HOURLY
+  PER_MINUTE
 }
 
 // Stage 2 enum – pre-built
@@ -61,29 +93,54 @@ model User {
   @@map("users")
 }
 
-model Candidate {
-  id                String          @id @default(cuid())
-  fullName          String          @map("full_name")
-  email             String          @unique
-  phone             String
-  location          String
-  yearsExperience   Int             @map("years_experience")
-  availabilityShift String          @map("availability_shift")
-  certifications    String[]
-  cvUrl             String?         @map("cv_url")
-  certificateUrl    String?         @map("certificate_url")
-  selectedLanguage  String          @map("selected_language")
-  status            CandidateStatus @default(PENDING)
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
+model Job {
+  id                 String                @id @default(cuid())
+  title              String
+  department         Department
+  status             JobStatus             @default(DRAFT)
+  scheduledPublishAt DateTime?             @map("scheduled_publish_at")
+  client             InterpretationClient?
+  positionType       PositionType?         @map("position_type")
+  roleType           RoleType?             @map("role_type")
+  description        String?
+  minDownloadSpeed   Float                 @default(20) @map("min_download_speed")
+  minUploadSpeed     Float                 @default(10) @map("min_upload_speed")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
 
+  candidates         Candidate[]
+
+  @@map("jobs")
+}
+
+model Candidate {
+  id                   String          @id @default(cuid())
+  fullName             String          @map("full_name")
+  email                String          @unique
+  phone                String
+  location             String
+  yearsExperience      Int?            @map("years_experience")
+  availabilityShift    String?         @map("availability_shift")
+  certifications       String[]
+  cvUrl                String?         @map("cv_url")
+  certificateUrl       String?         @map("certificate_url")
+  selectedLanguage     String?         @map("selected_language")
+  status               CandidateStatus @default(PENDING)
+  department           Department?
+  jobId                String?         @map("job_id")
+  vocarooUrl           String?         @map("vocaroo_url")
+  questionnaireAnswers Json?           @map("questionnaire_answers")
+  autoDisqualifyReason String?         @map("auto_disqualify_reason")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  job                Job?                          @relation(fields: [jobId], references: [id])
   systemCheck        SystemCheck?
   audioRecording     AudioRecording?
   filterResult       FilterResult?
   emailLogs          EmailLog[]
   assignedRecruiters RecruiterCandidateAssignment[]
   internalNotes      InternalNote[]
-  // Stage 2 relation – pre-built
   interviews         Interview[]
 
   @@map("candidates")
