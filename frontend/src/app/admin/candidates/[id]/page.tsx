@@ -9,7 +9,7 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import {
   ArrowLeft, FileText, Mic, Wifi, Monitor, Loader2, Send,
-  CheckCircle, XCircle, AlertTriangle, Flag, Video, ClipboardList,
+  CheckCircle, XCircle, AlertTriangle, Flag, Video, ClipboardList, CalendarClock,
 } from 'lucide-react';
 import { DEPT_LABELS, DEPT_COLORS } from '@/types';
 
@@ -66,6 +66,12 @@ export default function CandidateProfilePage() {
     } finally {
       setGeneratingLink(false);
     }
+  };
+
+  const copyBookingLink = () => {
+    const url = `${window.location.origin}/book/${candidateId}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Booking link copied!');
   };
 
   const handleStatusChange = async (status: string) => {
@@ -318,6 +324,34 @@ export default function CandidateProfilePage() {
             <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
               {fr.rejectionReasons.map((r, i) => <li key={i}>{r}</li>)}
             </ul>
+          )}
+        </Section>
+      )}
+
+      {/* Interview Booking (Admin+, Level 1 Passed only) */}
+      {currentUser && ['SUPER_ADMIN', 'ADMIN', 'RECRUITER'].includes(currentUser.role) && candidate.status === 'LEVEL1_PASSED' && (
+        <Section title="Interview Booking" icon={<CalendarClock size={18} />}>
+          {candidate.interviews && candidate.interviews[0]?.scheduledTime ? (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold text-green-700">Booked:</span>{' '}
+                {format(new Date(candidate.interviews[0].scheduledTime), 'EEEE, dd MMM yyyy · HH:mm')}
+              </p>
+              {candidate.interviews[0].msTeamsLink && (
+                <a href={candidate.interviews[0].msTeamsLink} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                  <Video size={15} /> Join Teams Meeting
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 flex-wrap">
+              <button onClick={copyBookingLink}
+                className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                <CalendarClock size={15} /> Copy Booking Link
+              </button>
+              <p className="text-sm text-gray-400">Share this link so the candidate can pick an interview slot from a recruiter&apos;s available hours.</p>
+            </div>
           )}
         </Section>
       )}

@@ -111,6 +111,7 @@ const sendRejection = async (candidate, reasons = []) => {
 };
 
 const sendLevel1Pass = async (candidate, teamsLink = null) => {
+  const bookingUrl = `${process.env.FRONTEND_URL}/book/${candidate.id}`;
   const meetingSection = teamsLink
     ? `<p style="margin-top:16px">Your interview has been scheduled. Please join using the link below:</p>
        <p style="margin:16px 0">
@@ -118,7 +119,12 @@ const sendLevel1Pass = async (candidate, teamsLink = null) => {
            Join Microsoft Teams Interview
          </a>
        </p>`
-    : `<p style="margin-top:16px">A member of our recruitment team will be in touch shortly to schedule the next stage of the process.</p>`;
+    : `<p style="margin-top:16px">Please choose an interview time that works for you using the link below:</p>
+       <p style="margin:16px 0">
+         <a href="${bookingUrl}" style="display:inline-block;background:#105279;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">
+           Book Your Interview
+         </a>
+       </p>`;
 
   const html = base(`
     <p>Dear <strong>${candidate.fullName}</strong>,</p>
@@ -129,6 +135,26 @@ const sendLevel1Pass = async (candidate, teamsLink = null) => {
     <p>Best regards,<br>The Recruitment Team</p>
   `);
   return send(candidate.email, 'Congratulations – Level 1 Passed! | TalentScreen', html, candidate.id, 'level1_pass');
+};
+
+// Confirmation once a candidate books an interview slot
+const sendInterviewBooked = async (candidate, scheduledTime, teamsLink = null) => {
+  const when = new Date(scheduledTime).toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+  const joinSection = teamsLink
+    ? `<p style="margin:16px 0"><a href="${teamsLink}" style="display:inline-block;background:#105279;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Join Microsoft Teams Interview</a></p>`
+    : '<p style="margin-top:16px">Your interviewer will share the meeting details before the interview.</p>';
+
+  const html = base(`
+    <p>Dear <strong>${candidate.fullName}</strong>,</p>
+    <p>Your interview has been scheduled. Here are the details:</p>
+    <p style="font-size:16px"><strong>${when}</strong></p>
+    ${joinSection}
+    <p>Please be ready a few minutes early. If you need to reschedule, reply to this email.</p>
+    <p>Best regards,<br>The Recruitment Team</p>
+  `);
+  return send(candidate.email, 'Your Interview is Scheduled', html, candidate.id, 'interview_booked');
 };
 
 // Neutral email for candidates who did not auto-pass — never indicates a "fail"
@@ -143,4 +169,4 @@ const sendUnderReview = async (candidate) => {
   return send(candidate.email, 'Application Received – Under Review', html, candidate.id, 'under_review');
 };
 
-module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview };
+module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview, sendInterviewBooked };
