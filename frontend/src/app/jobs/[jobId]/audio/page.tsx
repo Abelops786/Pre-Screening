@@ -112,7 +112,11 @@ function AudioContent() {
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center p-4">
       <div className="w-full max-w-xl">
         <div className="text-center mb-6">
-          <Image src="/logo.webp" alt="Logo" width={140} height={42} className="object-contain mx-auto mb-4" unoptimized />
+          <div className="flex justify-center mb-4">
+            <div className="bg-white rounded-xl px-4 py-2.5 shadow-md">
+              <Image src="/logo.webp" alt="Logo" width={140} height={42} className="object-contain h-9 w-auto" unoptimized />
+            </div>
+          </div>
           <div className="inline-flex items-center gap-2 bg-white/10 text-white rounded-full px-4 py-1.5 text-sm mb-3">
             <Mic size={16} /> Step 3 of 3 – Voice Screening
           </div>

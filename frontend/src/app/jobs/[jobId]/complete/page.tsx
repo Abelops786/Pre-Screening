@@ -12,7 +12,11 @@ function CompleteContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md text-center">
-        <Image src="/logo.webp" alt="Logo" width={150} height={46} className="object-contain mx-auto mb-8" unoptimized />
+        <div className="flex justify-center mb-8">
+          <div className="bg-white rounded-xl px-4 py-2.5 shadow-md">
+            <Image src="/logo.webp" alt="Logo" width={150} height={46} className="object-contain h-9 w-auto" unoptimized />
+          </div>
+        </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           {disqualified ? (

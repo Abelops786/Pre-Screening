@@ -39,9 +39,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const Sidebar = () => (
     <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-brand-900 text-white flex flex-col transform transition-transform duration-200
       ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:z-auto`}>
-      <div className="p-5 border-b border-brand-700 flex flex-col items-start gap-1">
-        <Image src="/logo.webp" alt="Logo" width={140} height={40} className="object-contain" unoptimized />
-        <p className="text-xs text-brand-300">Admin Portal</p>
+      <div className="p-5 border-b border-brand-700 flex flex-col items-start gap-2">
+        <div className="bg-white rounded-lg px-3 py-2 inline-flex shadow-sm">
+          <Image src="/logo.webp" alt="Logo" width={140} height={40} className="object-contain h-8 w-auto" unoptimized />
+        </div>
+        <p className="text-xs text-brand-200">Admin Portal</p>
       </div>
 
       <nav className="flex-1 p-4 space-y-1">

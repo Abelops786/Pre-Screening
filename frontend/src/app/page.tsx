@@ -48,9 +48,14 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900">
       {/* Header */}
-      <header className="max-w-5xl mx-auto px-6 py-8 flex items-center justify-between">
-        <Image src="/logo.webp" alt="Logo" width={160} height={48} className="object-contain" unoptimized />
-        <a href="/login" className="text-sm text-brand-200 hover:text-white transition-colors">Admin Login</a>
+      <header className="max-w-5xl mx-auto px-6 py-8 flex items-center justify-between gap-4">
+        <div className="bg-white rounded-xl px-4 py-2.5 shadow-md inline-flex shrink-0">
+          <Image src="/logo.webp" alt="Logo" width={150} height={44} className="object-contain h-9 w-auto" unoptimized />
+        </div>
+        <a href="/login"
+          className="text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/30 rounded-lg px-4 py-2 transition-colors whitespace-nowrap">
+          Admin Login
+        </a>
       </header>
 
       {/* Hero */}
@@ -141,7 +146,7 @@ export default function LandingPage() {
         </div>
       )}
 
-      <footer className="text-center text-brand-300 text-xs pb-8">
+      <footer className="text-center text-white/70 text-xs pb-8">
         © {new Date().getFullYear()} All rights reserved.
       </footer>
     </div>
