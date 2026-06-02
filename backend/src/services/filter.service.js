@@ -9,14 +9,15 @@
  *   5. Availability shift match (if configured)
  *
  * AI filter:
- *   6. Fluency score >= MIN_FLUENCY_SCORE (default 60)
+ *   6. Fluency score >= MIN_FLUENCY_SCORE (default 80 → 8 out of 10)
  *
  * Returns { filtersApplied, rejectionReasons, qualified }
  */
 
 const MIN_DOWNLOAD = parseFloat(process.env.MIN_DOWNLOAD_SPEED_MBPS || '5');
 const MIN_UPLOAD   = parseFloat(process.env.MIN_UPLOAD_SPEED_MBPS   || '2');
-const MIN_FLUENCY  = parseFloat(process.env.MIN_FLUENCY_SCORE        || '60');
+// Passing mark: 8 out of 10 (80%). Candidates below this fail the fluency check.
+const MIN_FLUENCY  = parseFloat(process.env.MIN_FLUENCY_SCORE        || '80');
 
 // Optional: comma-separated list of required certifications (e.g. "CompTIA A+,CCNA")
 const REQUIRED_CERTS = (process.env.REQUIRED_CERTIFICATIONS || '')
