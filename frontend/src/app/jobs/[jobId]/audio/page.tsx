@@ -19,7 +19,10 @@ function AudioContent() {
   const { jobId }    = useParams<{ jobId: string }>();
   const router       = useRouter();
   const params       = useSearchParams();
-  const candidateId  = params.get('id');
+  // Resilient read: fall back to window.location so a transient null from
+  // useSearchParams during hydration doesn't bounce the candidate away.
+  const candidateId  = params.get('id')
+    || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef        = useRef<Blob[]>([]);
@@ -30,10 +33,6 @@ function AudioContent() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl,  setAudioUrl]  = useState<string | null>(null);
   const [result,    setResult]    = useState<{ qualified: boolean; fluencyScore: number | null; flaggedForHumanReview?: boolean } | null>(null);
-
-  useEffect(() => {
-    if (!candidateId) router.replace('/');
-  }, [candidateId, router]);
 
   useEffect(() => () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -107,6 +106,19 @@ function AudioContent() {
 
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
   const progress = (elapsed / MAX_SECONDS) * 100;
+
+  // Only show an error if the id is genuinely missing (not a hydration blip)
+  if (!candidateId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl p-8 max-w-sm text-center">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Session Expired</h2>
+          <p className="text-gray-500 text-sm mb-4">We couldn&apos;t find your application session. Please start your application again.</p>
+          <button onClick={() => router.push('/')} className="bg-brand-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-brand-700">View All Positions</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center p-4">

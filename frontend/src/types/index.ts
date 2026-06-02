@@ -254,7 +254,7 @@ export const JOB_STATUS_COLORS: Record<JobStatus, string> = {
 
 export const INTERPRETATION_LANGUAGES = [
   'Acholi','Afrikaans','Albanian','Arabic','ASL','Azerbaijani','Bengali',
-  'Burmese','Cambodian (Khmer)','Cantonese','French','French US Based',
+  'Burmese','Cambodian (Khmer)','Cantonese','English','French','French US Based',
   'Gujarati','Haitian Creole','Hindi','Hmong','Korean','Laotian','Lingala',
   'Mandarin','Marshallese','Pashto','Portuguese','Rohingya','Russian',
   'Slovenian','Somali','Spanish','Swahili','Tagalog','Turkish','Ukrainian',

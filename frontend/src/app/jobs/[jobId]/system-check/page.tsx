@@ -11,20 +11,41 @@ type SpeedResult = { download: number; upload: number };
 async function measureSpeed(): Promise<SpeedResult> {
   let download = 0;
   let upload = 0;
+
+  // ── Download: stream a 25 MB file and measure the actual bytes received ──
   try {
-    const dlStart = performance.now();
-    const res = await fetch('https://speed.cloudflare.com/__down?bytes=5000000', { cache: 'no-store' });
-    await res.blob();
-    const dlTime = (performance.now() - dlStart) / 1000;
-    download = parseFloat(((5 * 8) / dlTime).toFixed(2));
+    // Warm up the connection first so TLS/handshake time isn't counted
+    await fetch('https://speed.cloudflare.com/__down?bytes=100000', { cache: 'no-store' }).then((r) => r.arrayBuffer()).catch(() => null);
+
+    const downBytes = 25_000_000; // 25 MB
+    const res = await fetch(`https://speed.cloudflare.com/__down?bytes=${downBytes}`, { cache: 'no-store' });
+    const reader = res.body?.getReader();
+    let received = 0;
+    const start = performance.now();
+    if (reader) {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value?.length || 0;
+      }
+    } else {
+      received = (await res.arrayBuffer()).byteLength;
+    }
+    const seconds = (performance.now() - start) / 1000;
+    if (seconds > 0 && received > 0) download = parseFloat(((received * 8) / 1e6 / seconds).toFixed(2)); // Mbps
   } catch { download = 0; }
+
+  // ── Upload: POST an 8 MB payload and measure the throughput ──
   try {
-    const blob = new Blob([new ArrayBuffer(2 * 1024 * 1024)]);
-    const ulStart = performance.now();
-    await fetch('https://speed.cloudflare.com/__up', { method: 'POST', body: blob, cache: 'no-store' }).catch(() => null);
-    const ulTime = (performance.now() - ulStart) / 1000;
-    upload = parseFloat(((2 * 8) / ulTime).toFixed(2));
+    const upBytes = 8_000_000; // 8 MB
+    const payload = new Uint8Array(upBytes);
+    const start = performance.now();
+    await fetch('https://speed.cloudflare.com/__up', { method: 'POST', body: payload, cache: 'no-store' }).catch(() => null);
+    const seconds = (performance.now() - start) / 1000;
+    if (seconds > 0) upload = parseFloat(((upBytes * 8) / 1e6 / seconds).toFixed(2)); // Mbps
   } catch { upload = 0; }
+
   return { download, upload };
 }
 
