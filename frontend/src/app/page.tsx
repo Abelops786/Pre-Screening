@@ -116,6 +116,11 @@ export default function LandingPage() {
                     <h4 className="font-semibold text-gray-900 text-base">{job.title}</h4>
                     {job.description && <p className="text-sm text-gray-500 mt-1 line-clamp-2">{job.description}</p>}
                     <div className="flex flex-wrap gap-2 mt-2">
+                      {job.language && (
+                        <span className="text-xs bg-accent-100 text-accent-800 px-2.5 py-1 rounded-full font-medium">
+                          {job.language}
+                        </span>
+                      )}
                       {job.workWindow && (
                         <span className="text-xs bg-brand-50 text-brand-700 px-2.5 py-1 rounded-full font-medium">
                           {job.workWindow}

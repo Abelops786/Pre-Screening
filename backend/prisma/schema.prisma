@@ -125,6 +125,7 @@ model Job {
   title              String
   department         Department
   departmentLabel    String?               @map("department_label")
+  language           String?
   status             JobStatus             @default(DRAFT)
   scheduledPublishAt DateTime?             @map("scheduled_publish_at")
   client             InterpretationClient?

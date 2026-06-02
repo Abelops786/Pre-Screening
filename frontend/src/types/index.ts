@@ -66,6 +66,7 @@ export interface Job {
   title: string;
   department: Department;
   departmentLabel?: string | null;
+  language?: string | null;
   status: JobStatus;
   scheduledPublishAt?: string | null;
   client?: InterpretationClient | null;

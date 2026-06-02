@@ -5,15 +5,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
 import { Mic, Square, Upload, Loader2, RefreshCw, Clock, CheckCircle } from 'lucide-react';
+import { getReadingTask, type ReadingTask } from '@/lib/readingPassages';
 
-const MAX_SECONDS = 120;
-const MIN_SECONDS = 15;
-
-const PROMPT = `Please speak clearly for at least 15 seconds on the following topic:
-
-"Tell us about your most recent work experience, your key responsibilities, and what you feel makes you a strong candidate for this role."
-
-Speak naturally and confidently. The recording will begin when you press the microphone button.`;
+const MAX_SECONDS = 90;
+const MIN_SECONDS = 25; // target ~30 seconds
 
 function AudioContent() {
   const { jobId }    = useParams<{ jobId: string }>();
@@ -23,6 +18,14 @@ function AudioContent() {
   // useSearchParams during hydration doesn't bounce the candidate away.
   const candidateId  = params.get('id')
     || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null);
+
+  // Reading task in the job's language (fetched below)
+  const [task, setTask] = useState<ReadingTask>(() => getReadingTask('English'));
+  useEffect(() => {
+    api.get(`/jobs/public/${jobId}`)
+      .then(({ data }) => setTask(getReadingTask(data.data.language)))
+      .catch(() => {});
+  }, [jobId]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef        = useRef<Blob[]>([]);
@@ -139,14 +142,19 @@ function AudioContent() {
         <div className="bg-white rounded-2xl shadow-2xl p-6 space-y-5">
           {phase !== 'done' && (
             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recording Prompt</p>
-              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{PROMPT}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                {task.mode === 'read' ? `Read aloud · ${task.language}` : `Speak · ${task.language}`}
+              </p>
+              <p className="text-xs text-gray-500 mb-2">{task.instruction}</p>
+              {task.mode === 'read' && (
+                <p className="text-base text-gray-900 leading-relaxed border-t border-gray-200 pt-3" dir="auto">{task.passage}</p>
+              )}
             </div>
           )}
 
           {phase === 'ready' && (
             <div className="text-center space-y-4">
-              <p className="text-sm text-gray-500">Speak for <strong>at least 15 seconds</strong>. Press the button to begin.</p>
+              <p className="text-sm text-gray-500">Record for <strong>about 30 seconds</strong>. Press the button to begin.</p>
               <button onClick={startRecording} className="mx-auto flex flex-col items-center gap-2 group">
                 <div className="w-20 h-20 rounded-full bg-brand-600 hover:bg-brand-700 flex items-center justify-center shadow-lg transition-all">
                   <Mic size={32} className="text-white" />

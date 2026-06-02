@@ -6,11 +6,11 @@ import { format } from 'date-fns';
 import { Plus, Pencil, Trash2, Globe, Copy, Loader2, X, Check } from 'lucide-react';
 import type { Job, JobStatus, PositionType, RoleType, DepartmentConfig } from '@/types';
 import {
-  JOB_STATUS_LABELS, JOB_STATUS_COLORS, DEPT_COLORS,
+  JOB_STATUS_LABELS, JOB_STATUS_COLORS, DEPT_COLORS, INTERPRETATION_LANGUAGES,
 } from '@/types';
 
 const BLANK: Partial<Job> & { password?: string } = {
-  title: '', department: 'CUSTOMER_SERVICE', departmentLabel: 'Customer Service', status: 'DRAFT',
+  title: '', department: 'CUSTOMER_SERVICE', departmentLabel: 'Customer Service', language: 'English', status: 'DRAFT',
   description: '', client: null, positionType: null, roleType: null,
   scheduledPublishAt: null, minDownloadSpeed: 20, minUploadSpeed: 10,
 };
@@ -51,6 +51,7 @@ export default function JobsPage() {
     setForm({
       title: j.title, department: j.department,
       departmentLabel: j.departmentLabel || undefined,
+      language: j.language || '',
       status: j.status,
       description: j.description || '', client: j.client || null,
       positionType: j.positionType || null, roleType: j.roleType || null,
@@ -237,6 +238,18 @@ export default function JobsPage() {
                 <p className="text-xs text-gray-400 mt-1">
                   Manage the list in <a href="/admin/departments" className="text-brand-600 underline">Departments</a>.
                 </p>
+              </div>
+
+              {/* Language */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <input list="job-languages" value={form.language || ''} onChange={(e) => set('language', e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  placeholder="e.g. English, Spanish, Urdu" />
+                <datalist id="job-languages">
+                  {INTERPRETATION_LANGUAGES.map((l) => <option key={l} value={l} />)}
+                </datalist>
+                <p className="text-xs text-gray-400 mt-1">The language candidates will be assessed in (shown to applicants and used for the voice reading test).</p>
               </div>
 
               {/* Interpretation-specific fields */}
