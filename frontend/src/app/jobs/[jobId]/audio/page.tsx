@@ -7,7 +7,7 @@ import api from '@/lib/api';
 import { Mic, Square, Upload, Loader2, RefreshCw, Clock, CheckCircle } from 'lucide-react';
 
 const MAX_SECONDS = 120;
-const MIN_SECONDS = 30;
+const MIN_SECONDS = 15;
 
 const PROMPT = `Please speak clearly for 1–2 minutes on the following topic:
 
@@ -134,7 +134,7 @@ function AudioContent() {
 
           {phase === 'ready' && (
             <div className="text-center space-y-4">
-              <p className="text-sm text-gray-500">Speak for <strong>1–2 minutes</strong>. Press the button to begin.</p>
+              <p className="text-sm text-gray-500">Speak for <strong>at least 15 seconds</strong>. Press the button to begin.</p>
               <button onClick={startRecording} className="mx-auto flex flex-col items-center gap-2 group">
                 <div className="w-20 h-20 rounded-full bg-brand-600 hover:bg-brand-700 flex items-center justify-center shadow-lg transition-all">
                   <Mic size={32} className="text-white" />
