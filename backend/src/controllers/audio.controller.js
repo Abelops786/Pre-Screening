@@ -102,15 +102,16 @@ const processAudio = async (req, res, next) => {
     // Send notification email (non-blocking)
     const updatedCandidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (filterResult.qualified) {
-      // Try to auto-create a Teams meeting using the stored admin MS token
+      // Try to auto-create a Teams meeting using the admin's stored refresh token
+      // (refresh tokens don't expire like access tokens, so this keeps working)
       let teamsLink = null;
       try {
         const admin = await prisma.user.findFirst({
-          where: { role: 'SUPER_ADMIN', msAccessToken: { not: null } },
+          where: { role: 'SUPER_ADMIN', msRefreshToken: { not: null } },
         });
-        if (admin?.msAccessToken) {
-          const meeting = await msService.createOnlineMeeting(
-            admin.msAccessToken,
+        if (admin?.msRefreshToken) {
+          const meeting = await msService.createOnlineMeetingWithRefresh(
+            admin.msRefreshToken,
             `TalentScreen Interview – ${updatedCandidate.fullName}`,
           );
           teamsLink = meeting.joinWebUrl || meeting.joinUrl || null;

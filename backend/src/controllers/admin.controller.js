@@ -213,14 +213,14 @@ const generateTeamsLink = async (req, res, next) => {
     if (candidate.status !== 'LEVEL1_PASSED') return error(res, 'Candidate has not passed Level 1', 422);
 
     const admin = await prisma.user.findFirst({
-      where: { role: 'SUPER_ADMIN', msAccessToken: { not: null } },
+      where: { role: 'SUPER_ADMIN', msRefreshToken: { not: null } },
     });
-    if (!admin?.msAccessToken) {
+    if (!admin?.msRefreshToken) {
       return error(res, 'Microsoft account not connected. Go to Settings and click Connect Microsoft.', 503);
     }
 
-    const meeting = await msService.createOnlineMeeting(
-      admin.msAccessToken,
+    const meeting = await msService.createOnlineMeetingWithRefresh(
+      admin.msRefreshToken,
       `TalentScreen Interview – ${candidate.fullName}`,
     );
     const teamsLink = meeting.joinWebUrl || meeting.joinUrl;

@@ -36,20 +36,37 @@ const getAuthCodeUrl = async () => {
   }
 };
 
+const SCOPES = ['User.Read', 'OnlineMeetings.ReadWrite', 'offline_access'];
+
 const acquireTokenByCode = async (code) => {
-  const tokenRequest = {
-    code,
-    scopes: ['User.Read', 'OnlineMeetings.ReadWrite', 'offline_access'],
-    redirectUri: process.env.MS_REDIRECT_URI,
-  };
+  const tokenRequest = { code, scopes: SCOPES, redirectUri: process.env.MS_REDIRECT_URI };
 
   try {
     const response = await cca.acquireTokenByCode(tokenRequest);
-    return response;
+
+    // Extract the long-lived refresh token from the MSAL cache so we can mint
+    // fresh access tokens later (access tokens expire after ~1 hour).
+    let refreshToken = null;
+    try {
+      const cache = JSON.parse(cca.getTokenCache().serialize());
+      const rtStore = cache.RefreshToken || {};
+      const firstKey = Object.keys(rtStore)[0];
+      if (firstKey) refreshToken = rtStore[firstKey]?.secret || null;
+    } catch (e) {
+      logger.warn('Could not extract MS refresh token from cache', { error: e.message });
+    }
+
+    return { ...response, refreshToken };
   } catch (error) {
     logger.error('Error acquiring token by code', { error });
     throw error;
   }
+};
+
+// Exchange a stored refresh token for a fresh access token
+const refreshAccessToken = async (refreshToken) => {
+  const response = await cca.acquireTokenByRefreshToken({ refreshToken, scopes: SCOPES });
+  return response.accessToken;
 };
 
 const createOnlineMeeting = async (accessToken, subject) => {
@@ -75,8 +92,17 @@ const createOnlineMeeting = async (accessToken, subject) => {
   }
 };
 
+// Create a meeting using a refresh token — always gets a fresh access token first,
+// so it keeps working long after the original login (no "token expired" errors).
+const createOnlineMeetingWithRefresh = async (refreshToken, subject) => {
+  const accessToken = await refreshAccessToken(refreshToken);
+  return createOnlineMeeting(accessToken, subject);
+};
+
 module.exports = {
   getAuthCodeUrl,
   acquireTokenByCode,
+  refreshAccessToken,
   createOnlineMeeting,
+  createOnlineMeetingWithRefresh,
 };

@@ -70,13 +70,16 @@ const evaluate = (candidate) => {
     }
   }
 
-  // ── AI filter 6: Fluency score ─────────────────────────────
+  // ── AI filter 6: Fluency score (strict pass mark) ──────────
+  // The passing mark applies to everyone: a candidate must score >= MIN_FLUENCY
+  // (8/10 = 80%) to pass. Flagged recordings are still recorded for recruiter
+  // context but no longer bypass the score requirement.
   filtersApplied.push({ rule: 'min_fluency_score', threshold: MIN_FLUENCY, value: audio?.fluencyScore });
   if (audio?.flaggedForHumanReview) {
-    // Flagged recordings are not auto-rejected — put them in qualified for human review
     filtersApplied.push({ rule: 'human_review_flag', value: true });
-  } else if (!audio || audio.fluencyScore === null || audio.fluencyScore < MIN_FLUENCY) {
-    rejectionReasons.push(`Fluency score too low (${audio?.fluencyScore ?? 'N/A'}%, minimum ${MIN_FLUENCY}%)`);
+  }
+  if (!audio || audio.fluencyScore === null || audio.fluencyScore < MIN_FLUENCY) {
+    rejectionReasons.push(`Fluency score below passing mark (${audio?.fluencyScore ?? 'N/A'}%, minimum ${MIN_FLUENCY}%)`);
   }
 
   const qualified = rejectionReasons.length === 0;
