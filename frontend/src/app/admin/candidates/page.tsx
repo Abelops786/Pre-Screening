@@ -127,7 +127,7 @@ export default function CandidatesPage() {
                     {c.job ? (
                       <div className="space-y-1">
                         <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${DEPT_COLORS[c.job.department as keyof typeof DEPT_COLORS] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {DEPT_LABELS[c.job.department as keyof typeof DEPT_LABELS] ?? c.job.department}
+                          {c.job.departmentLabel || DEPT_LABELS[c.job.department as keyof typeof DEPT_LABELS] || c.job.department}
                         </span>
                         <p className="text-xs text-gray-500 truncate max-w-[180px]">{c.job.title}</p>
                       </div>

@@ -93,11 +93,26 @@ model User {
   @@map("users")
 }
 
+// Admin-managed departments. Each custom department maps to one of the three
+// built-in questionnaire engines (Department enum) so clients can add new
+// department names without needing new question sets.
+model DepartmentConfig {
+  id               String     @id @default(cuid())
+  name             String     @unique
+  questionnaireType Department @map("questionnaire_type")
+  isActive         Boolean    @default(true) @map("is_active")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  @@map("department_configs")
+}
+
 model Job {
   id                 String                @id @default(cuid())
   slug               String?               @unique
   title              String
   department         Department
+  departmentLabel    String?               @map("department_label")
   status             JobStatus             @default(DRAFT)
   scheduledPublishAt DateTime?             @map("scheduled_publish_at")
   client             InterpretationClient?

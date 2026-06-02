@@ -32,12 +32,18 @@ export default function LandingPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Display name for a job: custom label falls back to built-in questionnaire name
+  const displayName = (j: Job) => j.departmentLabel || DEPT_LABELS[j.department];
+
+  // Group by display name so custom departments get their own card
   const grouped = jobs.reduce<Record<string, Job[]>>((acc, j) => {
-    (acc[j.department] = acc[j.department] || []).push(j);
+    const key = displayName(j);
+    (acc[key] = acc[key] || []).push(j);
     return acc;
   }, {});
 
-  const departments = ['INTERPRETATION', 'SALES', 'CUSTOMER_SERVICE'] as const;
+  // One card per distinct department name that has open jobs
+  const departments = Object.keys(grouped);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900">
@@ -57,33 +63,36 @@ export default function LandingPage() {
 
       {/* Department cards */}
       <div className="max-w-5xl mx-auto px-6 pb-6">
+        {departments.length === 0 && !loading ? (
+          <p className="text-center text-brand-200">No open positions at the moment. Please check back soon.</p>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {departments.map((dept) => {
-            const count = grouped[dept]?.length || 0;
-            const active = selected === dept;
+          {departments.map((name) => {
+            const jobsInGroup = grouped[name] || [];
+            const count = jobsInGroup.length;
+            const qType = jobsInGroup[0]?.department ?? 'CUSTOMER_SERVICE';
+            const active = selected === name;
             return (
               <button
-                key={dept}
-                onClick={() => setSelected(active ? null : dept)}
-                disabled={count === 0}
+                key={name}
+                onClick={() => setSelected(active ? null : name)}
                 className={`rounded-2xl p-6 text-left transition-all border-2 ${
                   active
                     ? 'bg-white border-brand-400 shadow-xl scale-[1.02]'
-                    : count === 0
-                    ? 'bg-white/10 border-transparent opacity-50 cursor-not-allowed'
                     : 'bg-white/95 border-transparent hover:border-brand-300 hover:shadow-lg hover:scale-[1.01]'
                 }`}
               >
-                <div className="mb-3">{DEPT_ICONS[dept]}</div>
-                <h2 className="text-base font-bold text-gray-900 mb-1">{DEPT_LABELS[dept]}</h2>
-                <p className="text-xs text-gray-500 mb-3">{DEPT_DESCRIPTIONS[dept]}</p>
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${count > 0 ? DEPT_COLORS[dept] : 'bg-gray-100 text-gray-400'}`}>
-                  {count > 0 ? `${count} open position${count !== 1 ? 's' : ''}` : 'No openings'}
+                <div className="mb-3">{DEPT_ICONS[qType]}</div>
+                <h2 className="text-base font-bold text-gray-900 mb-1">{name}</h2>
+                <p className="text-xs text-gray-500 mb-3">{DEPT_DESCRIPTIONS[qType]}</p>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${DEPT_COLORS[qType]}`}>
+                  {count} open position{count !== 1 ? 's' : ''}
                 </span>
               </button>
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Job listings for selected department */}
@@ -94,7 +103,7 @@ export default function LandingPage() {
           ) : (
             <div className="space-y-3">
               <h3 className="text-white font-semibold text-lg mb-4">
-                {DEPT_LABELS[selected as keyof typeof DEPT_LABELS]} Positions
+                {selected} Positions
               </h3>
               {(grouped[selected] || []).map((job) => (
                 <div key={job.id} className="bg-white rounded-2xl p-5 flex items-center justify-between gap-4 shadow-sm hover:shadow-md transition-shadow">

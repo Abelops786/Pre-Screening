@@ -851,6 +851,7 @@ export default function JobApplyPage() {
   );
 
   const DEPT_LABELS_MAP = { INTERPRETATION: 'Interpretation', SALES: 'Sales', CUSTOMER_SERVICE: 'Customer Service' };
+  const deptName = job.departmentLabel || DEPT_LABELS_MAP[job.department];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 py-8 px-4">
@@ -858,7 +859,7 @@ export default function JobApplyPage() {
         <div className="text-center mb-6">
           <Image src="/logo.webp" alt="Logo" width={150} height={44} className="object-contain mx-auto mb-4" unoptimized />
           <div className="inline-flex items-center gap-2 bg-white/10 text-white rounded-full px-4 py-1.5 text-sm mb-3">
-            {DEPT_LABELS_MAP[job.department]} Application
+            {deptName} Application
           </div>
           <h1 className="text-2xl font-bold text-white">{job.title}</h1>
           {job.description && <p className="text-brand-100 text-sm mt-2 max-w-lg mx-auto">{job.description}</p>}

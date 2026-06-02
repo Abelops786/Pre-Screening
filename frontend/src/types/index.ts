@@ -15,12 +15,21 @@ export type InterpretationClient = 'BIG_LANGUAGE' | 'TRANSPERFECT' | 'LANGO' | '
 export type PositionType = 'US_BASED' | 'INTERNATIONAL';
 export type RoleType     = 'DEDICATED_HOURLY' | 'PER_MINUTE';
 
+export interface DepartmentConfig {
+  id: string;
+  name: string;
+  questionnaireType: Department;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface Job {
   id: string;
   slug?: string | null;
   urlKey?: string;
   title: string;
   department: Department;
+  departmentLabel?: string | null;
   status: JobStatus;
   scheduledPublishAt?: string | null;
   client?: InterpretationClient | null;
@@ -107,7 +116,7 @@ export interface Candidate {
   questionnaireAnswers?: Record<string, unknown> | null;
   autoDisqualifyReason?: string | null;
   createdAt: string;
-  job?: { id: string; title: string; department: string } | null;
+  job?: { id: string; title: string; department: string; departmentLabel?: string | null } | null;
   systemCheck?: SystemCheck | null;
   audioRecording?: AudioRecording | null;
   filterResult?: FilterResult | null;

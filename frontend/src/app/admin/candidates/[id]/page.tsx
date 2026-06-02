@@ -158,7 +158,7 @@ export default function CandidateProfilePage() {
             <Row label="Position" value={
               <div className="flex flex-col items-end gap-1">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${DEPT_COLORS[candidate.job.department as keyof typeof DEPT_COLORS] ?? 'bg-gray-100 text-gray-600'}`}>
-                  {DEPT_LABELS[candidate.job.department as keyof typeof DEPT_LABELS] ?? candidate.job.department}
+                  {candidate.job.departmentLabel || DEPT_LABELS[candidate.job.department as keyof typeof DEPT_LABELS] || candidate.job.department}
                 </span>
                 <span className="text-xs text-gray-500">{candidate.job.title}</span>
               </div>

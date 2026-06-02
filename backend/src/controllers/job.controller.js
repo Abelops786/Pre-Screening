@@ -60,7 +60,7 @@ const listPublishedJobs = async (req, res, next) => {
     const jobs = await prisma.job.findMany({
       where: { status: 'PUBLISHED' },
       select: {
-        id: true, slug: true, title: true, department: true, description: true,
+        id: true, slug: true, title: true, department: true, departmentLabel: true, description: true,
         positionType: true, roleType: true, client: true,
         minDownloadSpeed: true, minUploadSpeed: true, createdAt: true,
       },
@@ -100,7 +100,7 @@ const getPublicJob = async (req, res, next) => {
     const job = await prisma.job.findFirst({
       where: { OR: [{ id: param }, { slug: param }] },
       select: {
-        id: true, slug: true, title: true, department: true, description: true,
+        id: true, slug: true, title: true, department: true, departmentLabel: true, description: true,
         status: true, positionType: true, roleType: true,
         minDownloadSpeed: true, minUploadSpeed: true, client: true,
       },
@@ -121,7 +121,7 @@ const getPublicJob = async (req, res, next) => {
 const createJob = async (req, res, next) => {
   try {
     const {
-      title, department, status, scheduledPublishAt,
+      title, department, departmentLabel, status, scheduledPublishAt,
       client, positionType, roleType, description,
       minDownloadSpeed, minUploadSpeed,
     } = req.body;
@@ -139,6 +139,7 @@ const createJob = async (req, res, next) => {
         title: title.trim(),
         slug,
         department,
+        departmentLabel: departmentLabel?.trim() || null,
         status: status || 'DRAFT',
         scheduledPublishAt: scheduledPublishAt ? new Date(scheduledPublishAt) : null,
         client: client || null,
@@ -158,7 +159,7 @@ const createJob = async (req, res, next) => {
 const updateJob = async (req, res, next) => {
   try {
     const {
-      title, department, status, scheduledPublishAt,
+      title, department, departmentLabel, status, scheduledPublishAt,
       client, positionType, roleType, description,
       minDownloadSpeed, minUploadSpeed,
     } = req.body;
@@ -170,6 +171,7 @@ const updateJob = async (req, res, next) => {
     const data = {};
     if (title !== undefined)              data.title = title.trim();
     if (department !== undefined)         data.department = department;
+    if (departmentLabel !== undefined)    data.departmentLabel = departmentLabel?.trim() || null;
     if (status !== undefined)             data.status = status;
     if (scheduledPublishAt !== undefined) data.scheduledPublishAt = scheduledPublishAt ? new Date(scheduledPublishAt) : null;
     if (client !== undefined)             data.client = client || null;

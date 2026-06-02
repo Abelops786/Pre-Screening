@@ -4,24 +4,25 @@ import api from '@/lib/api';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { Plus, Pencil, Trash2, Globe, Copy, Loader2, X, Check } from 'lucide-react';
-import type { Job, Department, JobStatus, PositionType, RoleType } from '@/types';
+import type { Job, JobStatus, PositionType, RoleType, DepartmentConfig } from '@/types';
 import {
-  JOB_STATUS_LABELS, JOB_STATUS_COLORS, DEPT_LABELS, DEPT_COLORS,
+  JOB_STATUS_LABELS, JOB_STATUS_COLORS, DEPT_COLORS,
 } from '@/types';
 
 const BLANK: Partial<Job> & { password?: string } = {
-  title: '', department: 'CUSTOMER_SERVICE', status: 'DRAFT',
+  title: '', department: 'CUSTOMER_SERVICE', departmentLabel: 'Customer Service', status: 'DRAFT',
   description: '', client: null, positionType: null, roleType: null,
   scheduledPublishAt: null, minDownloadSpeed: 20, minUploadSpeed: 10,
 };
 
 export default function JobsPage() {
-  const [jobs,     setJobs]     = useState<Job[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving,   setSaving]   = useState(false);
-  const [form,     setForm]     = useState<typeof BLANK>({ ...BLANK });
-  const [editId,   setEditId]   = useState<string | null>(null);
+  const [jobs,        setJobs]        = useState<Job[]>([]);
+  const [departments, setDepartments] = useState<DepartmentConfig[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showForm,    setShowForm]    = useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [form,        setForm]        = useState<typeof BLANK>({ ...BLANK });
+  const [editId,      setEditId]      = useState<string | null>(null);
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -32,12 +33,25 @@ export default function JobsPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchJobs(); }, []);
+  const fetchDepartments = async () => {
+    try {
+      const { data } = await api.get('/departments');
+      setDepartments(data.data);
+    } catch { /* non-blocking */ }
+  };
+
+  useEffect(() => { fetchJobs(); fetchDepartments(); }, []);
+
+  // Display name for a job: custom label falls back to questionnaire type name
+  const deptDisplay = (j: Job) =>
+    j.departmentLabel || departments.find((d) => d.questionnaireType === j.department)?.name || j.department;
 
   const openNew  = () => { setForm({ ...BLANK }); setEditId(null); setShowForm(true); };
   const openEdit = (j: Job) => {
     setForm({
-      title: j.title, department: j.department, status: j.status,
+      title: j.title, department: j.department,
+      departmentLabel: j.departmentLabel || undefined,
+      status: j.status,
       description: j.description || '', client: j.client || null,
       positionType: j.positionType || null, roleType: j.roleType || null,
       scheduledPublishAt: j.scheduledPublishAt || null,
@@ -45,6 +59,15 @@ export default function JobsPage() {
     });
     setEditId(j.id);
     setShowForm(true);
+  };
+
+  // When a department is picked, set both the display label and the questionnaire engine
+  const pickDepartment = (name: string) => {
+    const cfg = departments.find((d) => d.name === name);
+    if (cfg) {
+      set('departmentLabel', cfg.name);
+      set('department', cfg.questionnaireType);
+    }
   };
 
   const save = async () => {
@@ -130,7 +153,7 @@ export default function JobsPage() {
                   <td className="px-4 py-3 font-medium text-gray-900">{j.title}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full ${DEPT_COLORS[j.department]}`}>
-                      {DEPT_LABELS[j.department]}
+                      {deptDisplay(j)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -204,12 +227,16 @@ export default function JobsPage() {
               {/* Department */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
-                <select value={form.department} onChange={(e) => set('department', e.target.value as Department)}
+                <select value={form.departmentLabel || ''} onChange={(e) => pickDepartment(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-                  <option value="CUSTOMER_SERVICE">Customer Service</option>
-                  <option value="SALES">Sales</option>
-                  <option value="INTERPRETATION">Interpretation</option>
+                  {departments.length === 0 && <option value="">Loading…</option>}
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
                 </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Manage the list in <a href="/admin/departments" className="text-brand-600 underline">Departments</a>.
+                </p>
               </div>
 
               {/* Interpretation-specific fields */}
