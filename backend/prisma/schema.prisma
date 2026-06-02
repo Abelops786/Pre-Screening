@@ -107,6 +107,18 @@ model DepartmentConfig {
   @@map("department_configs")
 }
 
+// Editable questionnaire definition — one per questionnaire engine.
+// schema = { sections: [{ id, title, showIf?, fields: [{ key, label, type, options?, required?, placeholder?, optionsSource?, showIf?, protected? }] }] }
+model QuestionnaireTemplate {
+  id         String     @id @default(cuid())
+  department Department @unique
+  schema     Json
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  @@map("questionnaire_templates")
+}
+
 model Job {
   id                 String                @id @default(cuid())
   slug               String?               @unique

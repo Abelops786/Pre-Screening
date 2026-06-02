@@ -23,6 +23,42 @@ export interface DepartmentConfig {
   createdAt: string;
 }
 
+export type QFieldType = 'text' | 'textarea' | 'number' | 'radio' | 'checkbox' | 'select' | 'vocaroo' | 'confirm';
+
+export interface QField {
+  key: string;
+  label: string;
+  type: QFieldType;
+  options?: string[];
+  optionLabels?: Record<string, string>;
+  optionsSource?: 'languages';
+  required?: boolean;
+  placeholder?: string;
+  protected?: boolean;
+  script?: string;
+  guidance?: string;
+  showIf?: { key?: string; equals?: string; includes?: string; jobPositionType?: string; jobRoleType?: string };
+  hideIfJobHas?: string;
+}
+
+export interface QSection {
+  id: string;
+  title: string;
+  fields: QField[];
+  showIf?: { jobPositionType?: string; jobRoleType?: string };
+}
+
+export interface QuestionnaireSchema {
+  sections: QSection[];
+}
+
+export interface QuestionnaireTemplate {
+  id: string;
+  department: Department;
+  schema: QuestionnaireSchema;
+  updatedAt?: string;
+}
+
 export interface Job {
   id: string;
   slug?: string | null;

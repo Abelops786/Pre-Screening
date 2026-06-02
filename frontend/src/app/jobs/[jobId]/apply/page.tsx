@@ -1,812 +1,133 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
 import { Loader2, AlertCircle, ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import type { Job } from '@/types';
+import type { Job, QSection, QField, QuestionnaireSchema } from '@/types';
 import { INTERPRETATION_LANGUAGES } from '@/types';
 
-// ── Shared UI helpers ─────────────────────────────────────────
 const cls = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition';
-
-const Field = ({ label, error, children, req }: { label: string; error?: string; children: React.ReactNode; req?: boolean }) => (
-  <div className="space-y-1">
-    <label className="block text-sm font-medium text-gray-700">{label}{req && <span className="text-red-500 ml-0.5">*</span>}</label>
-    {children}
-    {error && <p className="text-xs text-red-500">{error}</p>}
-  </div>
-);
-
-const Radio = ({ name, value, label, checked, onChange }: { name: string; value: string; label: string; checked: boolean; onChange: () => void }) => (
-  <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 hover:text-gray-900">
-    <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="accent-brand-600 w-4 h-4" />
-    {label}
-  </label>
-);
-
-const Checkbox = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) => (
-  <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 hover:text-gray-900">
-    <input type="checkbox" checked={checked} onChange={onChange} className="accent-brand-600 w-4 h-4 rounded" />
-    {label}
-  </label>
-);
-
-type Section = { title: string; content: React.ReactNode };
-
-// ── Multi-step shell ──────────────────────────────────────────
 const STEP_SIZE = 3;
 
-function MultiStepForm({ sections, onSubmit, saving }: {
-  sections: Section[];
-  onSubmit: () => Promise<void>;
-  saving: boolean;
-}) {
-  const steps = [];
-  for (let i = 0; i < sections.length; i += STEP_SIZE) steps.push(sections.slice(i, i + STEP_SIZE));
-  const [step, setStep] = useState(0);
-  const totalSteps = steps.length;
-  const isLast = step === totalSteps - 1;
-  const progress = Math.round(((step + 1) / totalSteps) * 100);
+type Answers = Record<string, string | string[]>;
 
-  // Global section offset so numbering is continuous across all steps
-  const sectionOffset = step * STEP_SIZE;
-
-  return (
-    <div className="space-y-5">
-      {/* Progress */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>Step {step + 1} of {totalSteps}</span>
-          <span>{progress}% complete</span>
-        </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-brand-600 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
-        </div>
-        {/* Step dots */}
-        <div className="flex gap-1.5 justify-center pt-1">
-          {steps.map((_, i) => (
-            <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i < step ? 'bg-brand-600 w-5' : i === step ? 'bg-brand-600 w-8' : 'bg-gray-200 w-5'}`} />
-          ))}
-        </div>
-      </div>
-
-      {/* Sections for this step */}
-      {steps[step].map((section, idx) => {
-        const sectionNum = sectionOffset + idx + 1;
-        return (
-          <div key={sectionNum} className="space-y-4">
-            <div className="flex items-center gap-3 pt-2 border-t border-gray-100 first:border-t-0 first:pt-0">
-              <span className="w-7 h-7 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                {sectionNum}
-              </span>
-              <h3 className="text-base font-semibold text-gray-800">{section.title}</h3>
-            </div>
-            {section.content}
-          </div>
-        );
-      })}
-
-      {/* Navigation */}
-      <div className="flex gap-3 pt-4 border-t border-gray-100">
-        {step > 0 && (
-          <button onClick={() => setStep((s) => s - 1)}
-            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">
-            <ChevronLeft size={16} /> Previous
-          </button>
-        )}
-        <div className="flex-1" />
-        {isLast ? (
-          <button onClick={onSubmit} disabled={saving}
-            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold rounded-xl px-6 py-2.5 transition-colors">
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-            {saving ? 'Submitting…' : 'Submit Application'}
-          </button>
-        ) : (
-          <button onClick={() => setStep((s) => s + 1)}
-            className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl px-5 py-2.5 text-sm transition-colors">
-            Next <ChevronRight size={16} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════
-// CUSTOMER SERVICE FORM
-// ══════════════════════════════════════════════════════════════
-function CustomerServiceForm({ onSubmit, saving }: { onSubmit: (d: Record<string, unknown>) => Promise<void>; saving: boolean }) {
-  const [info, setInfo] = useState({ fullName: '', email: '', phone: '', location: '' });
-  const si = (k: string) => (v: string) => setInfo((p) => ({ ...p, [k]: v }));
-  const [q, setQ] = useState<Record<string, unknown>>({
-    englishProficiency: '', workedEnglishEnv: '', comfortSpeakingEnglish: '',
-    vocarooUrl: '',
-    hasCSExperience: '', csExperienceTypes: [] as string[], csExperienceDesc: '',
-    handleUpsetCustomers: '', difficultIssueExample: '', comfortRepetitive: '',
-    workedRemotely: '', remoteProductivity: '', comfortFixedSchedule: '',
-    feedbackResponse: '', comfortQATracking: '',
-    lookingFor: '', whyChanging: '', commitSixMonths: '',
-    availableFullTime: '', hasOtherJob: '', otherJobInterference: '',
-    availableIn2Weeks: '', upcomingCommitments: '',
-    hadAttendanceIssues: '', attendanceExplanation: '', backupPlan: '',
-    hasLaptop: '', hasHeadset: '', downloadOk: '', uploadOk: '', workspaceDesc: '',
-    finalConfirm: '',
-  });
-  const sq = (k: string, v: unknown) => setQ((p) => ({ ...p, [k]: v }));
-  const tg = (k: string, v: string) => setQ((p) => {
-    const a = (p[k] as string[]) || [];
-    return { ...p, [k]: a.includes(v) ? a.filter((x) => x !== v) : [...a, v] };
-  });
-
-  const handleSubmit = async () => {
-    if (!info.fullName || !info.email || !info.phone || !info.location) { toast.error('Please fill in all personal information fields'); return; }
-    if (!q.vocarooUrl) { toast.error('Voice recording link is required'); return; }
-    if (q.finalConfirm !== 'Yes') { toast.error('Please confirm your final declaration'); return; }
-    await onSubmit({ ...info, questionnaireAnswers: q, vocarooUrl: q.vocarooUrl });
-  };
-
-  const sections: Section[] = [
-    {
-      title: 'Location & Basic Information',
-      content: (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Full Name" req><input value={info.fullName} onChange={(e) => si('fullName')(e.target.value)} className={cls} placeholder="John Smith" /></Field>
-          <Field label="Email Address" req><input type="email" value={info.email} onChange={(e) => si('email')(e.target.value)} className={cls} placeholder="john@example.com" /></Field>
-          <Field label="Phone / WhatsApp" req><input value={info.phone} onChange={(e) => si('phone')(e.target.value)} className={cls} placeholder="+1 555 000 0000" /></Field>
-          <Field label="City / Country" req><input value={info.location} onChange={(e) => si('location')(e.target.value)} className={cls} placeholder="New York, USA" /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'English & Communication Skills',
-      content: (
-        <div className="space-y-4">
-          <Field label="English proficiency level">
-            <div className="space-y-2 mt-1">{['Native', 'Near-native / Fluent', 'Intermediate'].map((v) => <Radio key={v} name="ep" value={v} label={v} checked={q.englishProficiency === v} onChange={() => sq('englishProficiency', v)} />)}</div>
-          </Field>
-          <Field label="Worked in an English-speaking environment?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="wee" value={v} label={v} checked={q.workedEnglishEnv === v} onChange={() => sq('workedEnglishEnv', v)} />)}</div>
-          </Field>
-          <Field label="Comfort speaking with customers all day in English?">
-            <div className="space-y-2 mt-1">{['Very comfortable', 'Somewhat comfortable', 'Not comfortable'].map((v) => <Radio key={v} name="cse" value={v} label={v} checked={q.comfortSpeakingEnglish === v} onChange={() => sq('comfortSpeakingEnglish', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Voice Recording (Mandatory)',
-      content: (
-        <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 space-y-2">
-            <p className="font-semibold">Record using <a href="https://vocaroo.com" target="_blank" rel="noreferrer" className="underline">Vocaroo.com</a> — sound friendly, professional, natural, clear, customer-focused</p>
-            <p className="italic text-blue-700 text-xs leading-relaxed">"Hello, thank you for calling. My name is Sarah/John, and I'll be happy to assist you today. I understand how important it is to get this resolved as quickly as possible. Let me review your information and see the best way I can help. Thank you for your patience. I truly appreciate it. Please allow me one moment while I check this for you."</p>
-          </div>
-          <Field label="Paste Vocaroo link here" req><input value={q.vocarooUrl as string} onChange={(e) => sq('vocarooUrl', e.target.value)} className={cls} placeholder="https://vocaroo.com/..." /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Customer Service Experience',
-      content: (
-        <div className="space-y-4">
-          <Field label="Previous customer service experience?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="hce" value={v} label={v} checked={q.hasCSExperience === v} onChange={() => sq('hasCSExperience', v)} />)}</div>
-          </Field>
-          <Field label="Type of experience (select all that apply)">
-            <div className="grid grid-cols-2 gap-2 mt-1">{['Call center', 'Chat support', 'Email support', 'Technical support', 'Appointment scheduling', 'Billing support', 'Insurance support', 'Sales support', 'Hospitality / Travel', 'Healthcare support'].map((v) => <Checkbox key={v} label={v} checked={(q.csExperienceTypes as string[]).includes(v)} onChange={() => tg('csExperienceTypes', v)} />)}</div>
-          </Field>
-          <Field label="Briefly describe your experience"><textarea rows={3} value={q.csExperienceDesc as string} onChange={(e) => sq('csExperienceDesc', e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Customer Handling & Communication',
-      content: (
-        <div className="space-y-4">
-          <Field label="How do you handle upset or frustrated customers?"><textarea rows={3} value={q.handleUpsetCustomers as string} onChange={(e) => sq('handleUpsetCustomers', e.target.value)} className={cls} /></Field>
-          <Field label="Describe a difficult customer issue you resolved successfully"><textarea rows={3} value={q.difficultIssueExample as string} onChange={(e) => sq('difficultIssueExample', e.target.value)} className={cls} /></Field>
-          <Field label="Comfort with repetitive conversations and multitasking?">
-            <div className="space-y-2 mt-1">{['Very comfortable', 'Somewhat comfortable', 'Not comfortable'].map((v) => <Radio key={v} name="cr" value={v} label={v} checked={q.comfortRepetitive === v} onChange={() => sq('comfortRepetitive', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Remote Work & Discipline',
-      content: (
-        <div className="space-y-4">
-          <Field label="Worked remotely before?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="wr" value={v} label={v} checked={q.workedRemotely === v} onChange={() => sq('workedRemotely', v)} />)}</div>
-          </Field>
-          {q.workedRemotely === 'Yes' && <Field label="How did you stay productive working from home?"><textarea rows={3} value={q.remoteProductivity as string} onChange={(e) => sq('remoteProductivity', e.target.value)} className={cls} /></Field>}
-          <Field label="Comfortable with fixed-schedule remote role with attendance expectations?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="cfs" value={v} label={v} checked={q.comfortFixedSchedule === v} onChange={() => sq('comfortFixedSchedule', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Coachability & Teamwork',
-      content: (
-        <div className="space-y-4">
-          <Field label="How do you respond to supervisor feedback?"><textarea rows={3} value={q.feedbackResponse as string} onChange={(e) => sq('feedbackResponse', e.target.value)} className={cls} /></Field>
-          <Field label="Comfortable with QA evaluations, attendance tracking, productivity monitoring, and coaching sessions?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="cqa" value={v} label={v} checked={q.comfortQATracking === v} onChange={() => sq('comfortQATracking', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Work Stability & Commitment',
-      content: (
-        <div className="space-y-4">
-          <Field label="What are you primarily looking for?">
-            <div className="space-y-2 mt-1">{['Long-term career opportunity', 'Temporary job', 'Additional income', 'Exploring options'].map((v) => <Radio key={v} name="lf" value={v} label={v} checked={q.lookingFor === v} onChange={() => sq('lookingFor', v)} />)}</div>
-          </Field>
-          <Field label="Why are you interested in changing jobs?"><textarea rows={2} value={q.whyChanging as string} onChange={(e) => sq('whyChanging', e.target.value)} className={cls} /></Field>
-          <Field label="Can you commit to this role for at least 6 months?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="c6" value={v} label={v} checked={q.commitSixMonths === v} onChange={() => sq('commitSixMonths', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Schedule & Availability',
-      content: (
-        <div className="space-y-4">
-          <Field label="Available for a fixed full-time schedule?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="aft" value={v} label={v} checked={q.availableFullTime === v} onChange={() => sq('availableFullTime', v)} />)}</div>
-          </Field>
-          <Field label="Currently have another job?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="hoj" value={v} label={v} checked={q.hasOtherJob === v} onChange={() => sq('hasOtherJob', v)} />)}</div>
-          </Field>
-          {q.hasOtherJob === 'Yes' && <Field label="Will it interfere with your assigned schedule?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="oji" value={v} label={v} checked={q.otherJobInterference === v} onChange={() => sq('otherJobInterference', v)} />)}</div>
-          </Field>}
-          <Field label="Available to start within 1–2 weeks?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="a2w" value={v} label={v} checked={q.availableIn2Weeks === v} onChange={() => sq('availableIn2Weeks', v)} />)}</div>
-          </Field>
-          <Field label="Any upcoming commitments that may affect availability?"><textarea rows={2} value={q.upcomingCommitments as string} onChange={(e) => sq('upcomingCommitments', e.target.value)} className={cls} placeholder="Travel, studies, second job, etc." /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Attendance & Reliability',
-      content: (
-        <div className="space-y-4">
-          <Field label="Attendance or punctuality issues in previous jobs?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="hai" value={v} label={v} checked={q.hadAttendanceIssues === v} onChange={() => sq('hadAttendanceIssues', v)} />)}</div>
-          </Field>
-          {q.hadAttendanceIssues === 'Yes' && <Field label="Please explain"><textarea rows={2} value={q.attendanceExplanation as string} onChange={(e) => sq('attendanceExplanation', e.target.value)} className={cls} /></Field>}
-          <Field label="Backup plan if internet or power goes out during your shift?"><textarea rows={2} value={q.backupPlan as string} onChange={(e) => sq('backupPlan', e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Technical Requirements',
-      content: (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            {([['hasLaptop', 'Own laptop or desktop?'], ['hasHeadset', 'USB headset?'], ['downloadOk', 'Download ≥ 20 Mbps?'], ['uploadOk', 'Upload ≥ 10 Mbps?']] as [string, string][]).map(([k, lbl]) => (
-              <Field key={k} label={lbl}>
-                <div className="flex gap-4 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name={k} value={v} label={v} checked={q[k] === v} onChange={() => sq(k, v)} />)}</div>
-              </Field>
-            ))}
-          </div>
-          <Field label="Describe your workspace (noise, lighting, interruptions)"><textarea rows={2} value={q.workspaceDesc as string} onChange={(e) => sq('workspaceDesc', e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Final Confirmation',
-      content: (
-        <div className="bg-gray-50 rounded-xl p-4">
-          <Checkbox label="I confirm all information is accurate and I understand this is a structured remote position with attendance, QA, and productivity expectations." checked={q.finalConfirm === 'Yes'} onChange={() => sq('finalConfirm', q.finalConfirm === 'Yes' ? '' : 'Yes')} />
-        </div>
-      ),
-    },
-  ];
-
-  return <MultiStepForm sections={sections} onSubmit={handleSubmit} saving={saving} />;
-}
-
-// ══════════════════════════════════════════════════════════════
-// SALES FORM
-// ══════════════════════════════════════════════════════════════
-const BLOCKED_SALES = ['jamaica', 'philippines', 'egypt'];
-const AFRICAN_COUNTRIES = ['Algeria','Angola','Benin','Botswana','Burkina Faso','Burundi','Cabo Verde','Cameroon','Central African Republic','Chad','Comoros','Congo','DR Congo','Djibouti','Egypt','Equatorial Guinea','Eritrea','Eswatini','Ethiopia','Gabon','Gambia','Ghana','Guinea','Guinea-Bissau','Ivory Coast','Kenya','Lesotho','Liberia','Libya','Madagascar','Malawi','Mali','Mauritania','Mauritius','Morocco','Mozambique','Namibia','Niger','Nigeria','Rwanda','São Tomé','Senegal','Seychelles','Sierra Leone','Somalia','South Africa','South Sudan','Sudan','Tanzania','Togo','Tunisia','Uganda','Zambia','Zimbabwe'];
-
-function SalesForm({ onSubmit, saving }: { onSubmit: (d: Record<string, unknown>) => Promise<void>; saving: boolean }) {
-  const [info, setInfo] = useState({ fullName: '', email: '', phone: '', location: '' });
-  const si = (k: string) => (v: string) => setInfo((p) => ({ ...p, [k]: v }));
-  const [disq, setDisq] = useState(false);
-  const [q, setQ] = useState<Record<string, unknown>>({
-    country: '', city: '', isAfrica: false,
-    englishProficiency: '', workedEnglishEnv: '', englishExpDesc: '',
-    vocarooUrl: '',
-    hasExp: '', expTypes: [] as string[], expDesc: '',
-    comfortKPIs: '', metricsUsed: [] as string[],
-    workedRemotely: '', remoteProductivity: '', comfortMonitored: '',
-    comfortRejection: '', handleObjection: '',
-    feedbackResponse: '',
-    lookingFor: '',
-    hasOtherJob: '', otherJobInterference: '', availableIn2Weeks: '', upcomingCommitments: '',
-    hadAttendanceIssues: '', attendanceExplanation: '', backupPlan: '',
-    hasLaptop: '', hasHeadset: '', downloadOk: '', uploadOk: '', workspaceDesc: '',
-    finalConfirm: '',
-  });
-  const sq = (k: string, v: unknown) => setQ((p) => ({ ...p, [k]: v }));
-  const tg = (k: string, v: string) => setQ((p) => {
-    const a = (p[k] as string[]) || [];
-    return { ...p, [k]: a.includes(v) ? a.filter((x) => x !== v) : [...a, v] };
-  });
-
-  const checkCountry = (country: string) => {
-    sq('country', country);
-    const lc = country.toLowerCase();
-    const blocked = BLOCKED_SALES.some((c) => lc.includes(c));
-    const africa = AFRICAN_COUNTRIES.some((c) => c.toLowerCase() === lc.trim());
-    sq('isAfrica', africa);
-    setDisq(blocked || africa);
-  };
-
-  const handleSubmit = async () => {
-    if (!info.fullName || !info.email || !info.phone) { toast.error('Please fill in all personal information'); return; }
-    if (!q.vocarooUrl) { toast.error('Voice recording link is required'); return; }
-    if (q.finalConfirm !== 'Yes') { toast.error('Please confirm your final declaration'); return; }
-    await onSubmit({ ...info, location: info.location || (q.city as string) || '', questionnaireAnswers: q, vocarooUrl: q.vocarooUrl });
-  };
-
-  const sections: Section[] = [
-    {
-      title: 'Location & Eligibility',
-      content: (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Full Name" req><input value={info.fullName} onChange={(e) => si('fullName')(e.target.value)} className={cls} /></Field>
-            <Field label="Email Address" req><input type="email" value={info.email} onChange={(e) => si('email')(e.target.value)} className={cls} /></Field>
-            <Field label="Phone / WhatsApp" req><input value={info.phone} onChange={(e) => si('phone')(e.target.value)} className={cls} /></Field>
-            <Field label="Country of Residence" req>
-              <input value={q.country as string} onChange={(e) => checkCountry(e.target.value)} className={cls} placeholder="e.g. United States" />
-            </Field>
-            <Field label="City"><input value={q.city as string} onChange={(e) => sq('city', e.target.value)} className={cls} /></Field>
-          </div>
-          {disq && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-              <AlertCircle size={20} className="text-red-500 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-red-800">Location Not Eligible</p>
-                <p className="text-sm text-red-700 mt-1">We are not currently accepting applications from your location for this campaign. Thank you for your interest.</p>
-              </div>
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: 'English & Communication Skills',
-      content: (
-        <div className="space-y-4">
-          <Field label="English proficiency level">
-            <div className="space-y-2 mt-1">{['Native', 'Near-native / Fluent', 'Intermediate'].map((v) => <Radio key={v} name="sep" value={v} label={v} checked={q.englishProficiency === v} onChange={() => sq('englishProficiency', v)} />)}</div>
-          </Field>
-          <Field label="Worked in an English-speaking environment?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="swee" value={v} label={v} checked={q.workedEnglishEnv === v} onChange={() => sq('workedEnglishEnv', v)} />)}</div>
-          </Field>
-          <Field label="Describe your experience communicating with customers in English"><textarea rows={3} value={q.englishExpDesc as string} onChange={(e) => sq('englishExpDesc', e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Voice Recording (Mandatory)',
-      content: (
-        <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 space-y-2">
-            <p className="font-semibold">Record using <a href="https://vocaroo.com" target="_blank" rel="noreferrer" className="underline">Vocaroo.com</a> — sound friendly, natural, conversational, confident</p>
-            <p className="italic text-blue-700 text-xs leading-relaxed">"Hi, is this Mr. Jones? Great, my name is Sarah/John on a recorded line, and I'm calling today because our records indicate that you may qualify for a low cost or even free health insurance plan. Now just to make sure you qualify, I need to confirm that you are still not on Medicare or Medicaid, is that correct? Great, it sounds like you may qualify for health insurance benefits that are typically very low cost, or even free. Let me get you over to a licensed insurance agent so they can go over the benefits with you. One moment please."</p>
-          </div>
-          <Field label="Paste Vocaroo link" req><input value={q.vocarooUrl as string} onChange={(e) => sq('vocarooUrl', e.target.value)} className={cls} placeholder="https://vocaroo.com/..." /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Sales & Customer Service Experience',
-      content: (
-        <div className="space-y-4">
-          <Field label="Previous CS or sales experience?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="she" value={v} label={v} checked={q.hasExp === v} onChange={() => sq('hasExp', v)} />)}</div>
-          </Field>
-          <Field label="Type of experience (select all)">
-            <div className="grid grid-cols-2 gap-2 mt-1">{['Inbound customer service', 'Outbound sales', 'Lead generation', 'Appointment setting', 'Membership sales', 'Travel industry', 'Collections', 'Technical support'].map((v) => <Checkbox key={v} label={v} checked={(q.expTypes as string[]).includes(v)} onChange={() => tg('expTypes', v)} />)}</div>
-          </Field>
-          <Field label="Briefly describe your experience"><textarea rows={2} value={q.expDesc as string} onChange={(e) => sq('expDesc', e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Sales Targets & Performance',
-      content: (
-        <div className="space-y-4">
-          <Field label="Comfortable working with sales goals and KPIs?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="skpi" value={v} label={v} checked={q.comfortKPIs === v} onChange={() => sq('comfortKPIs', v)} />)}</div>
-          </Field>
-          <Field label="Worked with these metrics? (select all)">
-            <div className="grid grid-cols-2 gap-2 mt-1">{['Sales targets', 'Conversion rate', 'Call quotas', 'QA evaluations', 'Attendance metrics', 'Productivity metrics'].map((v) => <Checkbox key={v} label={v} checked={(q.metricsUsed as string[]).includes(v)} onChange={() => tg('metricsUsed', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Remote Work & Discipline',
-      content: (
-        <div className="space-y-4">
-          <Field label="Worked remotely before?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="swr" value={v} label={v} checked={q.workedRemotely === v} onChange={() => sq('workedRemotely', v)} />)}</div>
-          </Field>
-          {q.workedRemotely === 'Yes' && <Field label="How did you stay productive at home?"><textarea rows={2} value={q.remoteProductivity as string} onChange={(e) => sq('remoteProductivity', e.target.value)} className={cls} /></Field>}
-          <Field label="Comfortable with fixed-schedule, monitored remote role?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="scm" value={v} label={v} checked={q.comfortMonitored === v} onChange={() => sq('comfortMonitored', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Sales Mindset & Pressure Tolerance',
-      content: (
-        <div className="space-y-4">
-          <Field label="Comfort handling rejection and repetitive conversations?">
-            <div className="space-y-2 mt-1">{['Very comfortable', 'Somewhat comfortable', 'Not comfortable'].map((v) => <Radio key={v} name="scr" value={v} label={v} checked={q.comfortRejection === v} onChange={() => sq('comfortRejection', v)} />)}</div>
-          </Field>
-          <Field label={"A customer says \"I'm interested, but I need to think about it.\" How do you respond?"}>
-            <textarea rows={3} value={q.handleObjection as string} onChange={(e) => sq('handleObjection', e.target.value)} className={cls} />
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Coachability & Work Stability',
-      content: (
-        <div className="space-y-4">
-          <Field label="How do you respond to supervisor feedback?"><textarea rows={3} value={q.feedbackResponse as string} onChange={(e) => sq('feedbackResponse', e.target.value)} className={cls} /></Field>
-          <Field label="What are you primarily looking for?">
-            <div className="space-y-2 mt-1">{['Long-term career opportunity', 'Temporary job', 'Additional income', 'Exploring options'].map((v) => <Radio key={v} name="slf" value={v} label={v} checked={q.lookingFor === v} onChange={() => sq('lookingFor', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Availability',
-      content: (
-        <div className="space-y-4">
-          <Field label="Currently have another job?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="soj" value={v} label={v} checked={q.hasOtherJob === v} onChange={() => sq('hasOtherJob', v)} />)}</div>
-          </Field>
-          {q.hasOtherJob === 'Yes' && <Field label="Will it interfere with your schedule?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="soji" value={v} label={v} checked={q.otherJobInterference === v} onChange={() => sq('otherJobInterference', v)} />)}</div>
-          </Field>}
-          <Field label="Available to start within 1–2 weeks?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="sa2w" value={v} label={v} checked={q.availableIn2Weeks === v} onChange={() => sq('availableIn2Weeks', v)} />)}</div>
-          </Field>
-          <Field label="Any upcoming commitments?"><textarea rows={2} value={q.upcomingCommitments as string} onChange={(e) => sq('upcomingCommitments', e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Attendance, Technical & Final',
-      content: (
-        <div className="space-y-4">
-          <Field label="Attendance or punctuality issues in previous jobs?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="sai" value={v} label={v} checked={q.hadAttendanceIssues === v} onChange={() => sq('hadAttendanceIssues', v)} />)}</div>
-          </Field>
-          {q.hadAttendanceIssues === 'Yes' && <Field label="Please explain"><textarea rows={2} value={q.attendanceExplanation as string} onChange={(e) => sq('attendanceExplanation', e.target.value)} className={cls} /></Field>}
-          <Field label="Backup plan if internet/power goes out?"><textarea rows={2} value={q.backupPlan as string} onChange={(e) => sq('backupPlan', e.target.value)} className={cls} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            {([['hasLaptop', 'Own laptop or desktop?'], ['hasHeadset', 'USB headset?'], ['downloadOk', 'Download ≥ 20 Mbps?'], ['uploadOk', 'Upload ≥ 10 Mbps?']] as [string, string][]).map(([k, lbl]) => (
-              <Field key={k} label={lbl}>
-                <div className="flex gap-4 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name={`st-${k}`} value={v} label={v} checked={q[k] === v} onChange={() => sq(k, v)} />)}</div>
-              </Field>
-            ))}
-          </div>
-          <Field label="Describe your workspace"><textarea rows={2} value={q.workspaceDesc as string} onChange={(e) => sq('workspaceDesc', e.target.value)} className={cls} /></Field>
-          <div className="bg-gray-50 rounded-xl p-4">
-            <Checkbox label="I confirm all information is accurate and I understand this is a structured remote position with attendance, QA, and performance expectations." checked={q.finalConfirm === 'Yes'} onChange={() => sq('finalConfirm', q.finalConfirm === 'Yes' ? '' : 'Yes')} />
-          </div>
-        </div>
-      ),
-    },
-  ];
-
-  return <MultiStepForm sections={sections} onSubmit={handleSubmit} saving={saving} />;
-}
-
-// ══════════════════════════════════════════════════════════════
-// INTERPRETATION FORM
-// ══════════════════════════════════════════════════════════════
-function InterpretationForm({ job, onSubmit, saving }: { job: Job; onSubmit: (d: Record<string, unknown>) => Promise<void>; saving: boolean }) {
-  const [info, setInfo] = useState({ fullName: '', email: '', phone: '', location: '' });
-  const si = (k: string) => (v: string) => setInfo((p) => ({ ...p, [k]: v }));
-  const [q, setQ] = useState<Record<string, unknown>>({
-    positionType: job.positionType === 'US_BASED' ? 'us_based' : job.positionType === 'INTERNATIONAL' ? 'international' : '',
-    roleType: job.roleType === 'DEDICATED_HOURLY' ? 'dedicated_hourly' : job.roleType === 'PER_MINUTE' ? 'per_minute' : '',
-    languagePair: '', proficiencyLevel: '', yearsExperience: '',
-    interpretationModes: [] as string[], companiesWorkedWith: '',
-    specializations: [] as string[], assignmentDesc: '',
-    certifications: '', ridCertified: '',
-    residesInUS: '', usCity: '', usState: '', internetProvider: '',
-    locationComplianceConfirm: '', connectionType: '',
-    intlCountry: '', intlCity: '', intlConnectionType: '', stabilityConfirm: '',
-    canCommitSchedule: '', hasOtherJob: '', otherJobInterference: '', scheduleCommitConfirm: '',
-    readyForAssessment: '', upcomingCommitments: '',
-    hasLaptop: '', hasHeadset: '', downloadOk: '', uploadOk: '', lowLatency: '', hasWebcam: '',
-    workedRemoteBefore: '', hasQuietWorkspace: '', workspaceDesc: '',
-    familiarWithEthics: '', ethicsScenario: '', askedToOmit: '',
-    firstThingOnOPICall: '', availableForPeakHours: '',
-    finalConfirm: '',
-  });
-  const sq = useCallback((k: string, v: unknown) => setQ((p) => ({ ...p, [k]: v })), []);
-  const tg = (k: string, v: string) => setQ((p) => {
-    const a = (p[k] as string[]) || [];
-    return { ...p, [k]: a.includes(v) ? a.filter((x) => x !== v) : [...a, v] };
-  });
-
-  const isASL = (q.languagePair as string)?.toLowerCase().includes('asl');
-  const isUS = q.positionType === 'us_based' || job.positionType === 'US_BASED';
-  const isIntl = q.positionType === 'international' || job.positionType === 'INTERNATIONAL';
-  const isPM = q.roleType === 'per_minute' || job.roleType === 'PER_MINUTE';
-
-  const handleSubmit = async () => {
-    if (!info.fullName || !info.email || !info.phone || !info.location) { toast.error('Please fill in all personal information'); return; }
-    if (!q.languagePair) { toast.error('Language pair is required'); return; }
-    if (q.finalConfirm !== 'Yes') { toast.error('Please confirm your final declaration'); return; }
-    await onSubmit({ ...info, questionnaireAnswers: q });
-  };
-
-  // Build section list dynamically — skip sections pre-set by the job
-  const sections: Section[] = [
-    {
-      title: 'Personal Information',
-      content: (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Full Name" req><input value={info.fullName} onChange={(e) => si('fullName')(e.target.value)} className={cls} /></Field>
-          <Field label="Email Address" req><input type="email" value={info.email} onChange={(e) => si('email')(e.target.value)} className={cls} /></Field>
-          <Field label="Phone / WhatsApp" req><input value={info.phone} onChange={(e) => si('phone')(e.target.value)} className={cls} /></Field>
-          <Field label="City / Country" req><input value={info.location} onChange={(e) => si('location')(e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    // Only show if not pre-set by the job
-    ...(!job.positionType ? [{
-      title: 'Position Type',
-      content: (
-        <Field label="Which position are you applying for?">
-          <div className="space-y-2 mt-1">
-            <Radio name="ipt" value="us_based" label="U.S.-based position (must reside in the United States)" checked={q.positionType === 'us_based'} onChange={() => sq('positionType', 'us_based')} />
-            <Radio name="ipt" value="international" label="International position (outside the United States)" checked={q.positionType === 'international'} onChange={() => sq('positionType', 'international')} />
-          </div>
-        </Field>
-      ),
-    }] : []),
-    ...(!job.roleType ? [{
-      title: 'Role Type',
-      content: (
-        <Field label="Which type of role are you applying for?">
-          <div className="space-y-2 mt-1">
-            <Radio name="irt" value="dedicated_hourly" label="Dedicated hourly (fixed schedule)" checked={q.roleType === 'dedicated_hourly'} onChange={() => sq('roleType', 'dedicated_hourly')} />
-            <Radio name="irt" value="per_minute" label="Per-minute / on-demand" checked={q.roleType === 'per_minute'} onChange={() => sq('roleType', 'per_minute')} />
-          </div>
-        </Field>
-      ),
-    }] : []),
-    {
-      title: 'Language & Qualification',
-      content: (
-        <div className="space-y-4">
-          <Field label="Language pair you are applying for" req>
-            <select value={q.languagePair as string} onChange={(e) => sq('languagePair', e.target.value)} className={cls}>
-              <option value="">— Select language —</option>
-              {INTERPRETATION_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </Field>
-          {isASL && (
-            <div className="space-y-3">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">ASL roles require a valid RID certification.</div>
-              <Field label="Do you hold a valid RID certification?">
-                <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="rid" value={v} label={v} checked={q.ridCertified === v} onChange={() => sq('ridCertified', v)} />)}</div>
-              </Field>
-            </div>
-          )}
-          <Field label="Proficiency level in each language">
-            <div className="space-y-2 mt-1">{['Native', 'Bilingual', 'Professional working proficiency'].map((v) => <Radio key={v} name="ipl" value={v} label={v} checked={q.proficiencyLevel === v} onChange={() => sq('proficiencyLevel', v)} />)}</div>
-          </Field>
-          <Field label="Years of professional interpreting experience">
-            <input type="number" min="0" value={q.yearsExperience as string} onChange={(e) => sq('yearsExperience', e.target.value)} className={cls} />
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Interpretation Experience',
-      content: (
-        <div className="space-y-4">
-          <Field label="Have you interpreted via:">
-            <div className="grid grid-cols-2 gap-2 mt-1">{['Phone (OPI)', 'Video (VRI)', 'Both', 'Onsite (Face to Face)'].map((v) => <Checkbox key={v} label={v} checked={(q.interpretationModes as string[]).includes(v)} onChange={() => tg('interpretationModes', v)} />)}</div>
-          </Field>
-          <Field label="Companies or platforms you've worked with"><textarea rows={2} value={q.companiesWorkedWith as string} onChange={(e) => sq('companiesWorkedWith', e.target.value)} className={cls} placeholder="e.g. Language Line, TransPerfect…" /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Specialization & Certifications',
-      content: (
-        <div className="space-y-4">
-          <Field label="Fields you've worked in (select all that apply)">
-            <div className="grid grid-cols-2 gap-2 mt-1">{['Medical', 'Legal', 'Financial', 'Social Services', 'Emergency', 'None'].map((v) => <Checkbox key={v} label={v} checked={(q.specializations as string[]).includes(v)} onChange={() => tg('specializations', v)} />)}</div>
-          </Field>
-          <Field label="Describe type of assignments handled"><textarea rows={2} value={q.assignmentDesc as string} onChange={(e) => sq('assignmentDesc', e.target.value)} className={cls} placeholder="e.g. ICU discharge, court hearings, 911 calls…" /></Field>
-          <Field label="Interpreter certifications held (name + issuing body)"><textarea rows={2} value={q.certifications as string} onChange={(e) => sq('certifications', e.target.value)} className={cls} placeholder="e.g. CMI-Spanish (NBCMI)…" /></Field>
-        </div>
-      ),
-    },
-    // U.S.-based location section
-    ...(isUS ? [{
-      title: 'U.S. Location & Compliance',
-      content: (
-        <div className="space-y-4">
-          <Field label="Are you currently residing in the United States?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="rus" value={v} label={v} checked={q.residesInUS === v} onChange={() => sq('residesInUS', v)} />)}</div>
-          </Field>
-          {q.residesInUS === 'No' && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 font-medium">This is a U.S.-based position. You must reside in the U.S. to qualify.</div>}
-          {q.residesInUS === 'Yes' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="City"><input value={q.usCity as string} onChange={(e) => sq('usCity', e.target.value)} className={cls} /></Field>
-                <Field label="State"><input value={q.usState as string} onChange={(e) => sq('usState', e.target.value)} className={cls} /></Field>
-              </div>
-              <Field label="Internet provider"><input value={q.internetProvider as string} onChange={(e) => sq('internetProvider', e.target.value)} className={cls} /></Field>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">I confirm I will work from my true U.S. physical location and will not use any tools that mask my location.</div>
-              <Field label="Confirm the above?">
-                <div className="flex gap-6 mt-1">{['Yes, I confirm', 'No'].map((v) => <Radio key={v} name="lcc" value={v} label={v} checked={q.locationComplianceConfirm === v} onChange={() => sq('locationComplianceConfirm', v)} />)}</div>
-              </Field>
-              <Field label="Internet connection type">
-                <div className="space-y-2 mt-1">{['Direct home internet (ISP-based)', 'Office/corporate network', 'Shared or remote desktop', 'I connect through another system'].map((v) => <Radio key={v} name="ict" value={v} label={v} checked={q.connectionType === v} onChange={() => sq('connectionType', v)} />)}</div>
-              </Field>
-            </div>
-          )}
-        </div>
-      ),
-    }] : []),
-    // International location section
-    ...(isIntl ? [{
-      title: 'International Location Details',
-      content: (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Country"><input value={q.intlCountry as string} onChange={(e) => sq('intlCountry', e.target.value)} className={cls} /></Field>
-            <Field label="City"><input value={q.intlCity as string} onChange={(e) => sq('intlCity', e.target.value)} className={cls} /></Field>
-          </div>
-          <Field label="Internet connection type">
-            <div className="space-y-2 mt-1">{['Direct home internet', 'Office/corporate network', 'Shared or remote system'].map((v) => <Radio key={v} name="iict" value={v} label={v} checked={q.intlConnectionType === v} onChange={() => sq('intlConnectionType', v)} />)}</div>
-          </Field>
-          <Field label="I confirm I will work from a stable, consistent location supporting uninterrupted service quality">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="isc" value={v} label={v} checked={q.stabilityConfirm === v} onChange={() => sq('stabilityConfirm', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    }] : []),
-    {
-      title: 'Availability & Schedule Commitment',
-      content: (
-        <div className="space-y-4">
-          {job.workWindow && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-              <p className="font-semibold">Work Window for This Position</p>
-              <p className="mt-1">Our work window is <strong>{job.workWindow}</strong>. Your shift will be assigned based on business needs.</p>
-            </div>
-          )}
-          <Field label="Able to commit to a fixed schedule within this window?">
-            <div className="space-y-2 mt-1">{['Yes', 'No', 'Need to discuss'].map((v) => <Radio key={v} name="ics" value={v} label={v} checked={q.canCommitSchedule === v} onChange={() => sq('canCommitSchedule', v)} />)}</div>
-          </Field>
-          <Field label="Currently have another job?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="ioj" value={v} label={v} checked={q.hasOtherJob === v} onChange={() => sq('hasOtherJob', v)} />)}</div>
-          </Field>
-          {q.hasOtherJob === 'Yes' && !isPM && <Field label="Will it interfere with your dedicated schedule?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="ioji" value={v} label={v} checked={q.otherJobInterference === v} onChange={() => sq('otherJobInterference', v)} />)}</div>
-          </Field>}
-          <Field label="Do you confirm full commitment to your assigned schedule?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="iscc" value={v} label={v} checked={q.scheduleCommitConfirm === v} onChange={() => sq('scheduleCommitConfirm', v)} />)}</div>
-          </Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Readiness to Start',
-      content: (
-        <div className="space-y-4">
-          <Field label="Available to complete client assessment and protocol training within 1–2 weeks?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="ira" value={v} label={v} checked={q.readyForAssessment === v} onChange={() => sq('readyForAssessment', v)} />)}</div>
-          </Field>
-          <Field label="Any upcoming commitments that may affect your start date?"><textarea rows={2} value={q.upcomingCommitments as string} onChange={(e) => sq('upcomingCommitments', e.target.value)} className={cls} placeholder="Study / Travel / Other" /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Technical Requirements',
-      content: (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            {([['hasLaptop', 'Own laptop or desktop?'], ['hasHeadset', 'USB headset?'], ['downloadOk', 'Download ≥ 20 Mbps?'], ['uploadOk', 'Upload ≥ 10 Mbps?'], ['lowLatency', 'Latency below 250 ms?'], ['hasWebcam', 'Webcam (min 720p)?']] as [string, string][]).map(([k, lbl]) => (
-              <Field key={k} label={lbl}>
-                <div className="flex gap-4 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name={`it-${k}`} value={v} label={v} checked={q[k] === v} onChange={() => sq(k, v)} />)}</div>
-              </Field>
-            ))}
-          </div>
-          <Field label="Worked fully remotely before?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="iwrb" value={v} label={v} checked={q.workedRemoteBefore === v} onChange={() => sq('workedRemoteBefore', v)} />)}</div>
-          </Field>
-          <Field label="Quiet, interruption-free workspace?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="iqw" value={v} label={v} checked={q.hasQuietWorkspace === v} onChange={() => sq('hasQuietWorkspace', v)} />)}</div>
-          </Field>
-          <Field label="Describe your workspace"><textarea rows={2} value={q.workspaceDesc as string} onChange={(e) => sq('workspaceDesc', e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Ethics & Compliance',
-      content: (
-        <div className="space-y-4">
-          <Field label="Familiar with interpreter code of ethics and HIPAA?">
-            <div className="space-y-2 mt-1">{['Yes, both', 'Only code of ethics', 'Only HIPAA', 'No'].map((v) => <Radio key={v} name="ife" value={v} label={v} checked={q.familiarWithEthics === v} onChange={() => sq('familiarWithEthics', v)} />)}</div>
-          </Field>
-          <Field label="Describe a situation where you applied confidentiality, impartiality, accuracy, or protected sensitive information"><textarea rows={3} value={q.ethicsScenario as string} onChange={(e) => sq('ethicsScenario', e.target.value)} className={cls} /></Field>
-          <Field label="Have you ever been asked to omit information or take sides during an interaction? What did you do?"><textarea rows={3} value={q.askedToOmit as string} onChange={(e) => sq('askedToOmit', e.target.value)} className={cls} /></Field>
-        </div>
-      ),
-    },
-    {
-      title: 'Performance & Final Confirmation',
-      content: (
-        <div className="space-y-4">
-          <Field label="What is the first thing you do when you receive an OPI call?">
-            <div className="space-y-2 mt-1">{['Introduce myself as the interpreter and follow protocol', 'Wait for the parties to start speaking', 'Ask who called first', "I'm not sure"].map((v) => <Radio key={v} name="iopi" value={v} label={v} checked={q.firstThingOnOPICall === v} onChange={() => sq('firstThingOnOPICall', v)} />)}</div>
-          </Field>
-          {isPM && <Field label="Able to stay available and responsive during peak hours?">
-            <div className="flex gap-6 mt-1">{['Yes', 'No'].map((v) => <Radio key={v} name="iph" value={v} label={v} checked={q.availableForPeakHours === v} onChange={() => sq('availableForPeakHours', v)} />)}</div>
-          </Field>}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <Checkbox label="I confirm that all information provided is accurate and truthful." checked={q.finalConfirm === 'Yes'} onChange={() => sq('finalConfirm', q.finalConfirm === 'Yes' ? '' : 'Yes')} />
-          </div>
-        </div>
-      ),
-    },
-  ];
-
-  return <MultiStepForm sections={sections} onSubmit={handleSubmit} saving={saving} />;
-}
-
-// ══════════════════════════════════════════════════════════════
-// ROOT PAGE
-// ══════════════════════════════════════════════════════════════
 export default function JobApplyPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const router    = useRouter();
-  const [job,      setJob]     = useState<Job | null>(null);
-  const [loading,  setLoading] = useState(true);
+
+  const [job,      setJob]      = useState<Job | null>(null);
+  const [schema,   setSchema]   = useState<QuestionnaireSchema | null>(null);
+  const [loading,  setLoading]  = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [saving,   setSaving]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [step,     setStep]     = useState(0);
+
+  const [info,    setInfo]    = useState({ fullName: '', email: '', phone: '', location: '' });
+  const [answers, setAnswers] = useState<Answers>({});
 
   useEffect(() => {
+    let dept = '';
     api.get(`/jobs/public/${jobId}`)
-      .then(({ data }) => setJob(data.data))
+      .then(({ data }) => { setJob(data.data); dept = data.data.department; })
+      .then(() => api.get(`/questionnaires/public/${dept}`))
+      .then(({ data }) => setSchema(data.data.schema))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [jobId]);
 
-  const handleSubmit = async (payload: Record<string, unknown>) => {
+  const setInfoField = (k: string) => (v: string) => setInfo((p) => ({ ...p, [k]: v }));
+  const setAnswer = (key: string, v: string | string[]) => setAnswers((p) => ({ ...p, [key]: v }));
+  const toggleMulti = (key: string, v: string) => setAnswers((p) => {
+    const arr = (p[key] as string[]) || [];
+    return { ...p, [key]: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v] };
+  });
+
+  // Effective position/role: from the job if pre-set, else from the candidate's answer
+  const effPosition = job?.positionType
+    || (answers.positionType === 'us_based' ? 'US_BASED' : answers.positionType === 'international' ? 'INTERNATIONAL' : null);
+  const effRole = job?.roleType
+    || (answers.roleType === 'dedicated_hourly' ? 'DEDICATED_HOURLY' : answers.roleType === 'per_minute' ? 'PER_MINUTE' : null);
+
+  const fieldVisible = (f: QField): boolean => {
+    if (f.hideIfJobHas === 'positionType' && job?.positionType) return false;
+    if (f.hideIfJobHas === 'roleType' && job?.roleType) return false;
+    const s = f.showIf;
+    if (!s) return true;
+    if (s.jobPositionType) return effPosition === s.jobPositionType;
+    if (s.jobRoleType) return effRole === s.jobRoleType;
+    if (s.key && s.equals !== undefined) return answers[s.key] === s.equals;
+    if (s.key && s.includes !== undefined) return String(answers[s.key] || '').toLowerCase().includes(s.includes);
+    return true;
+  };
+
+  const visibleFields = (sec: QSection) => sec.fields.filter(fieldVisible);
+
+  const sectionVisible = (sec: QSection): boolean => {
+    if (sec.showIf?.jobPositionType && effPosition !== sec.showIf.jobPositionType) return false;
+    if (sec.showIf?.jobRoleType && effRole !== sec.showIf.jobRoleType) return false;
+    return visibleFields(sec).length > 0;
+  };
+
+  // Personal info is always the first section; then the visible dynamic sections
+  const dynSections = (schema?.sections || []).filter(sectionVisible);
+  const allSections: ({ personal: true } | { personal: false; sec: QSection })[] = [
+    { personal: true },
+    ...dynSections.map((sec) => ({ personal: false as const, sec })),
+  ];
+
+  const steps: typeof allSections[] = [];
+  for (let i = 0; i < allSections.length; i += STEP_SIZE) steps.push(allSections.slice(i, i + STEP_SIZE));
+  const totalSteps = steps.length || 1;
+  const safeStep = Math.min(step, totalSteps - 1);
+  const isLast = safeStep === totalSteps - 1;
+  const progress = Math.round(((safeStep + 1) / totalSteps) * 100);
+
+  // ── Validation for the current step ──
+  const validateStep = (entries: typeof allSections): string | null => {
+    for (const item of entries) {
+      if (item.personal) {
+        if (!info.fullName.trim()) return 'Full name is required';
+        if (!info.email.trim()) return 'Email is required';
+        if (!info.phone.trim()) return 'Phone is required';
+        if (!info.location.trim()) return 'Location is required';
+      } else {
+        for (const f of visibleFields(item.sec)) {
+          if (!f.required) continue;
+          const v = answers[f.key];
+          if (f.type === 'checkbox') { if (!Array.isArray(v) || v.length === 0) return `"${f.label}" is required`; }
+          else if (f.type === 'confirm') { if (v !== 'Yes') return `Please confirm: "${f.label}"`; }
+          else if (!v || (typeof v === 'string' && !v.trim())) return `"${f.label}" is required`;
+        }
+      }
+    }
+    return null;
+  };
+
+  const next = () => {
+    const err = validateStep(steps[safeStep]);
+    if (err) { toast.error(err); return; }
+    setStep(safeStep + 1);
+  };
+
+  const submit = async () => {
+    const err = validateStep(steps[safeStep]);
+    if (err) { toast.error(err); return; }
+    // full validation across all steps
+    const allErr = validateStep(allSections);
+    if (allErr) { toast.error(allErr); return; }
+
+    const vocarooField = (schema?.sections || []).flatMap((s) => s.fields).find((f) => f.type === 'vocaroo');
+    const vocarooUrl = vocarooField ? (answers[vocarooField.key] as string) : undefined;
+
     setSaving(true);
     try {
-      const { data } = await api.post(`/candidates/job/${jobId}`, payload);
+      const { data } = await api.post(`/candidates/job/${jobId}`, {
+        ...info,
+        questionnaireAnswers: answers,
+        vocarooUrl,
+      });
       const { candidateId, autoDisqualified, reason } = data.data;
       if (autoDisqualified) {
         toast.info(reason || 'Your application has been received.');
@@ -815,16 +136,13 @@ export default function JobApplyPage() {
         toast.success('Application submitted!');
         router.push(`/jobs/${jobId}/system-check?id=${candidateId}`);
       }
-    } catch (err: unknown) {
-      const res = (err as { response?: { data?: { message?: string; data?: { id: string; status: string } } } })?.response?.data;
+    } catch (e: unknown) {
+      const res = (e as { response?: { data?: { message?: string; data?: { id: string; status: string } } } })?.response?.data;
       if (res?.message === 'already_applied' && res?.data) {
         const { id, status } = res.data;
         toast.info('Resuming your application…');
-        if (status === 'PENDING' || status === 'SYSTEM_CHECK_FAILED') {
-          router.push(`/jobs/${jobId}/system-check?id=${id}`);
-        } else {
-          router.push(`/jobs/${jobId}/complete`);
-        }
+        router.push(status === 'PENDING' || status === 'SYSTEM_CHECK_FAILED'
+          ? `/jobs/${jobId}/system-check?id=${id}` : `/jobs/${jobId}/complete`);
         return;
       }
       toast.error(res?.message || 'Submission failed. Please try again.');
@@ -839,7 +157,7 @@ export default function JobApplyPage() {
     </div>
   );
 
-  if (notFound || !job) return (
+  if (notFound || !job || !schema) return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl p-8 max-w-sm text-center">
         <AlertCircle size={40} className="text-red-500 mx-auto mb-3" />
@@ -853,6 +171,9 @@ export default function JobApplyPage() {
   const DEPT_LABELS_MAP = { INTERPRETATION: 'Interpretation', SALES: 'Sales', CUSTOMER_SERVICE: 'Customer Service' };
   const deptName = job.departmentLabel || DEPT_LABELS_MAP[job.department];
 
+  // global section numbering offset for the current step
+  let runningNumber = safeStep * STEP_SIZE;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -865,12 +186,184 @@ export default function JobApplyPage() {
           {job.description && <p className="text-brand-100 text-sm mt-2 max-w-lg mx-auto">{job.description}</p>}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
-          {job.department === 'CUSTOMER_SERVICE' && <CustomerServiceForm onSubmit={handleSubmit} saving={saving} />}
-          {job.department === 'SALES'            && <SalesForm onSubmit={handleSubmit} saving={saving} />}
-          {job.department === 'INTERPRETATION'   && <InterpretationForm job={job} onSubmit={handleSubmit} saving={saving} />}
+        <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 space-y-5">
+          {/* Progress */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Step {safeStep + 1} of {totalSteps}</span>
+              <span>{progress}% complete</span>
+            </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-brand-600 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+
+          {/* Sections for this step */}
+          {steps[safeStep]?.map((item) => {
+            runningNumber += 1;
+            const num = runningNumber;
+            return (
+              <div key={item.personal ? 'personal' : item.sec.id} className="space-y-4">
+                <div className="flex items-center gap-3 pt-2 border-t border-gray-100 first:border-t-0 first:pt-0">
+                  <span className="w-7 h-7 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center shrink-0">{num}</span>
+                  <h3 className="text-base font-semibold text-gray-800">
+                    {item.personal ? 'Personal Information' : item.sec.title}
+                  </h3>
+                </div>
+
+                {item.personal ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FieldWrap label="Full Name" req><input value={info.fullName} onChange={(e) => setInfoField('fullName')(e.target.value)} className={cls} placeholder="John Smith" /></FieldWrap>
+                    <FieldWrap label="Email Address" req><input type="email" value={info.email} onChange={(e) => setInfoField('email')(e.target.value)} className={cls} placeholder="john@example.com" /></FieldWrap>
+                    <FieldWrap label="Phone / WhatsApp" req><input value={info.phone} onChange={(e) => setInfoField('phone')(e.target.value)} className={cls} placeholder="+1 555 000 0000" /></FieldWrap>
+                    <FieldWrap label="City / Country" req><input value={info.location} onChange={(e) => setInfoField('location')(e.target.value)} className={cls} placeholder="New York, USA" /></FieldWrap>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Work-window banner for the interpretation availability section */}
+                    {job.workWindow && item.sec.fields.some((f) => f.key === 'canCommitSchedule') && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+                        <p className="font-semibold">Work Window for This Position</p>
+                        <p className="mt-1">Our work window is <strong>{job.workWindow}</strong>. Your shift will be assigned based on business needs.</p>
+                      </div>
+                    )}
+                    {visibleFields(item.sec).map((f) => (
+                      <DynField key={f.key} field={f}
+                        value={answers[f.key]}
+                        onChange={(v) => setAnswer(f.key, v)}
+                        onToggle={(v) => toggleMulti(f.key, v)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Navigation */}
+          <div className="flex gap-3 pt-4 border-t border-gray-100">
+            {safeStep > 0 && (
+              <button onClick={() => setStep(safeStep - 1)}
+                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">
+                <ChevronLeft size={16} /> Previous
+              </button>
+            )}
+            <div className="flex-1" />
+            {isLast ? (
+              <button onClick={submit} disabled={saving}
+                className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold rounded-xl px-6 py-2.5 transition-colors">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                {saving ? 'Submitting…' : 'Submit Application'}
+              </button>
+            ) : (
+              <button onClick={next}
+                className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl px-5 py-2.5 text-sm transition-colors">
+                Next <ChevronRight size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+// ── helpers ──
+function FieldWrap({ label, children, req }: { label: string; children: React.ReactNode; req?: boolean }) {
+  return (
+    <div className="space-y-1">
+      <label className="block text-sm font-medium text-gray-700">{label}{req && <span className="text-red-500 ml-0.5">*</span>}</label>
+      {children}
+    </div>
+  );
+}
+
+function DynField({ field, value, onChange, onToggle }: {
+  field: QField;
+  value: string | string[] | undefined;
+  onChange: (v: string) => void;
+  onToggle: (v: string) => void;
+}) {
+  const label = (
+    <label className="block text-sm font-medium text-gray-700">
+      {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
+    </label>
+  );
+  const optLabel = (o: string) => field.optionLabels?.[o] || o;
+
+  switch (field.type) {
+    case 'text':
+    case 'number':
+      return (
+        <div className="space-y-1">{label}
+          <input type={field.type === 'number' ? 'number' : 'text'} value={(value as string) || ''}
+            onChange={(e) => onChange(e.target.value)} className={cls} placeholder={field.placeholder} />
+        </div>
+      );
+    case 'textarea':
+      return (
+        <div className="space-y-1">{label}
+          <textarea rows={3} value={(value as string) || ''} onChange={(e) => onChange(e.target.value)} className={cls} placeholder={field.placeholder} />
+        </div>
+      );
+    case 'select': {
+      const options = field.optionsSource === 'languages' ? INTERPRETATION_LANGUAGES : (field.options || []);
+      return (
+        <div className="space-y-1">{label}
+          <select value={(value as string) || ''} onChange={(e) => onChange(e.target.value)} className={cls}>
+            <option value="">— Select —</option>
+            {options.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      );
+    }
+    case 'radio':
+      return (
+        <div className="space-y-1">{label}
+          <div className="space-y-2 mt-1">
+            {(field.options || []).map((o) => (
+              <label key={o} className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700">
+                <input type="radio" name={field.key} checked={value === o} onChange={() => onChange(o)} className="accent-brand-600 w-4 h-4" />
+                {optLabel(o)}
+              </label>
+            ))}
+          </div>
+        </div>
+      );
+    case 'checkbox':
+      return (
+        <div className="space-y-1">{label}
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            {(field.options || []).map((o) => (
+              <label key={o} className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700">
+                <input type="checkbox" checked={Array.isArray(value) && value.includes(o)} onChange={() => onToggle(o)} className="accent-brand-600 w-4 h-4 rounded" />
+                {optLabel(o)}
+              </label>
+            ))}
+          </div>
+        </div>
+      );
+    case 'vocaroo':
+      return (
+        <div className="space-y-3">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 space-y-2">
+            {field.guidance && <p className="font-semibold">Record using <a href="https://vocaroo.com" target="_blank" rel="noreferrer" className="underline">Vocaroo.com</a> — {field.guidance}</p>}
+            {field.script && <p className="italic text-blue-700 text-xs leading-relaxed">&ldquo;{field.script}&rdquo;</p>}
+          </div>
+          <div className="space-y-1">{label}
+            <input value={(value as string) || ''} onChange={(e) => onChange(e.target.value)} className={cls} placeholder="https://vocaroo.com/..." />
+          </div>
+        </div>
+      );
+    case 'confirm':
+      return (
+        <div className="bg-gray-50 rounded-xl p-4">
+          <label className="flex items-start gap-2.5 cursor-pointer text-sm text-gray-700">
+            <input type="checkbox" checked={value === 'Yes'} onChange={(e) => onChange(e.target.checked ? 'Yes' : '')} className="accent-brand-600 w-4 h-4 rounded mt-0.5" />
+            <span>{field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}</span>
+          </label>
+        </div>
+      );
+    default:
+      return null;
+  }
 }

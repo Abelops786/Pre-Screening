@@ -3,6 +3,25 @@ const prisma = require('../config/database');
 const { success, error } = require('../utils/responseHelper');
 const emailService = require('../services/email.service');
 
+// African countries — used by the Sales campaign location filter
+const AFRICAN_COUNTRIES = [
+  'algeria','angola','benin','botswana','burkina faso','burundi','cabo verde','cape verde',
+  'cameroon','central african republic','chad','comoros','congo','dr congo','democratic republic of the congo',
+  'djibouti','egypt','equatorial guinea','eritrea','eswatini','swaziland','ethiopia','gabon','gambia','ghana',
+  'guinea','guinea-bissau','ivory coast','cote d\'ivoire','kenya','lesotho','liberia','libya','madagascar',
+  'malawi','mali','mauritania','mauritius','morocco','mozambique','namibia','niger','nigeria','rwanda',
+  'sao tome and principe','senegal','seychelles','sierra leone','somalia','south africa','south sudan','sudan',
+  'tanzania','togo','tunisia','uganda','zambia','zimbabwe',
+];
+
+const isBlockedSalesLocation = (countryRaw) => {
+  const country = (countryRaw || '').toLowerCase().trim();
+  if (!country) return false;
+  const blocked = ['jamaica', 'philippines', 'egypt'];
+  if (blocked.some((c) => country.includes(c))) return true;
+  return AFRICAN_COUNTRIES.some((c) => country === c || country.includes(c));
+};
+
 // ── Original flow submit (kept intact) ────────────────────────
 const submit = async (req, res, next) => {
   try {
@@ -108,10 +127,8 @@ const submitJobApplication = async (req, res, next) => {
 
     // ── Auto-disqualifiers ───────────────────────────────────
     if (job.department === 'SALES') {
-      const blockedCountries = ['jamaica', 'philippines', 'egypt'];
-      const country = (questionnaireAnswers?.country || '').toLowerCase();
-      const isAfrica = questionnaireAnswers?.isAfrica === true;
-      if (blockedCountries.some((c) => country.includes(c)) || isAfrica) {
+      const country = questionnaireAnswers?.country || location;
+      if (isBlockedSalesLocation(country)) {
         const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'Location not eligible for this campaign' }).catch(async (e) => {
           if (e.code === 'P2002') {
             const ex = await prisma.candidate.findUnique({ where: { email } });
