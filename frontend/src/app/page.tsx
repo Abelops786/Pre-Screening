@@ -112,7 +112,7 @@ export default function LandingPage() {
                     {job.description && <p className="text-sm text-gray-500 mt-1 line-clamp-2">{job.description}</p>}
                     <div className="flex flex-wrap gap-2 mt-2">
                       {job.workWindow && (
-                        <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">
+                        <span className="text-xs bg-brand-50 text-brand-700 px-2.5 py-1 rounded-full font-medium">
                           {job.workWindow}
                         </span>
                       )}

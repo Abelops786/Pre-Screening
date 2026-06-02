@@ -222,7 +222,7 @@ export default function JobApplyPage() {
                   <div className="space-y-4">
                     {/* Work-window banner for the interpretation availability section */}
                     {job.workWindow && item.sec.fields.some((f) => f.key === 'canCommitSchedule') && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+                      <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 text-sm text-brand-800">
                         <p className="font-semibold">Work Window for This Position</p>
                         <p className="mt-1">Our work window is <strong>{job.workWindow}</strong>. Your shift will be assigned based on business needs.</p>
                       </div>
@@ -345,9 +345,9 @@ function DynField({ field, value, onChange, onToggle }: {
     case 'vocaroo':
       return (
         <div className="space-y-3">
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 space-y-2">
+          <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 text-sm text-brand-800 space-y-2">
             {field.guidance && <p className="font-semibold">Record using <a href="https://vocaroo.com" target="_blank" rel="noreferrer" className="underline">Vocaroo.com</a> — {field.guidance}</p>}
-            {field.script && <p className="italic text-blue-700 text-xs leading-relaxed">&ldquo;{field.script}&rdquo;</p>}
+            {field.script && <p className="italic text-brand-700 text-xs leading-relaxed">&ldquo;{field.script}&rdquo;</p>}
           </div>
           <div className="space-y-1">{label}
             <input value={(value as string) || ''} onChange={(e) => onChange(e.target.value)} className={cls} placeholder="https://vocaroo.com/..." />

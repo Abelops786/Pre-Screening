@@ -8,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 
-const COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#be185d', '#65a30d'];
+const COLORS = ['#105279', '#1f83b6', '#b098eb', '#16a34a', '#d97706', '#0891b2', '#8364d6', '#65a30d'];
 
 interface Analytics {
   kpi: { total: number; qualified: number; rejected: number; pending: number };

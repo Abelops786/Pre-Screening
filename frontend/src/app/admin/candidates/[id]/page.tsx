@@ -290,7 +290,7 @@ export default function CandidateProfilePage() {
                 href={teamsLink}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+                className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
               >
                 <Video size={15} /> Join Teams Meeting
               </a>
@@ -309,7 +309,7 @@ export default function CandidateProfilePage() {
               <button
                 onClick={generateTeamsLink}
                 disabled={generatingLink}
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+                className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
               >
                 {generatingLink ? <Loader2 size={15} className="animate-spin" /> : <Video size={15} />}
                 {generatingLink ? 'Generating…' : 'Generate Teams Link'}

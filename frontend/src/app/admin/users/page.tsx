@@ -163,8 +163,8 @@ export default function UsersPage() {
                   <td className="px-4 py-3 text-gray-500">{u.email}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      u.role === 'SUPER_ADMIN' ? 'bg-purple-100 text-purple-700'
-                        : u.role === 'ADMIN'   ? 'bg-blue-100 text-blue-700'
+                      u.role === 'SUPER_ADMIN' ? 'bg-accent-100 text-accent-700'
+                        : u.role === 'ADMIN'   ? 'bg-brand-100 text-brand-700'
                         : 'bg-gray-100 text-gray-700'
                     }`}>
                       {u.role.replace('_', ' ')}

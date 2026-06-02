@@ -54,7 +54,7 @@ const base = (content) => `
   <style>
     body { font-family: Arial, sans-serif; background: #f4f6fa; margin: 0; padding: 0; }
     .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-    .header  { background: #1d4ed8; color: #fff; padding: 28px 32px; }
+    .header  { background: #105279; color: #fff; padding: 28px 32px; }
     .header h1 { margin: 0; font-size: 22px; }
     .body    { padding: 28px 32px; color: #374151; line-height: 1.7; }
     .footer  { background: #f9fafb; padding: 16px 32px; text-align: center; font-size: 12px; color: #9ca3af; }
@@ -108,7 +108,7 @@ const sendLevel1Pass = async (candidate, teamsLink = null) => {
   const meetingSection = teamsLink
     ? `<p style="margin-top:16px">Your interview has been scheduled. Please join using the link below:</p>
        <p style="margin:16px 0">
-         <a href="${teamsLink}" style="display:inline-block;background:#1d4ed8;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">
+         <a href="${teamsLink}" style="display:inline-block;background:#105279;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">
            Join Microsoft Teams Interview
          </a>
        </p>`
