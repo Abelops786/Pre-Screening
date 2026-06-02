@@ -12,38 +12,60 @@ async function measureSpeed(): Promise<SpeedResult> {
   let download = 0;
   let upload = 0;
 
-  // ── Download: stream a 25 MB file and measure the actual bytes received ──
+  // ── Download: parallel streams over a fixed window (the technique fast.com /
+  // speedtest use) so high-speed links are properly saturated and measured. ──
   try {
-    // Warm up the connection first so TLS/handshake time isn't counted
-    await fetch('https://speed.cloudflare.com/__down?bytes=100000', { cache: 'no-store' }).then((r) => r.arrayBuffer()).catch(() => null);
+    // Warm up the connection so TLS/handshake time isn't counted
+    await fetch('https://speed.cloudflare.com/__down?bytes=200000', { cache: 'no-store' })
+      .then((r) => r.arrayBuffer()).catch(() => null);
 
-    const downBytes = 25_000_000; // 25 MB
-    const res = await fetch(`https://speed.cloudflare.com/__down?bytes=${downBytes}`, { cache: 'no-store' });
-    const reader = res.body?.getReader();
-    let received = 0;
-    const start = performance.now();
-    if (reader) {
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        received += value?.length || 0;
+    const STREAMS  = 6;
+    const DURATION = 6000; // ms
+    let totalBytes = 0;
+    const start    = performance.now();
+    const deadline = start + DURATION;
+
+    const worker = async () => {
+      while (performance.now() < deadline) {
+        try {
+          const res = await fetch('https://speed.cloudflare.com/__down?bytes=30000000', { cache: 'no-store' });
+          const reader = res.body?.getReader();
+          if (!reader) { totalBytes += (await res.arrayBuffer()).byteLength; continue; }
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            totalBytes += value?.length || 0;
+            if (performance.now() >= deadline) { try { await reader.cancel(); } catch { /* ignore */ } break; }
+          }
+        } catch { break; }
       }
-    } else {
-      received = (await res.arrayBuffer()).byteLength;
-    }
+    };
+    await Promise.all(Array.from({ length: STREAMS }, worker));
     const seconds = (performance.now() - start) / 1000;
-    if (seconds > 0 && received > 0) download = parseFloat(((received * 8) / 1e6 / seconds).toFixed(2)); // Mbps
+    if (seconds > 0 && totalBytes > 0) download = parseFloat(((totalBytes * 8) / 1e6 / seconds).toFixed(1)); // Mbps
   } catch { download = 0; }
 
-  // ── Upload: POST an 8 MB payload and measure the throughput ──
+  // ── Upload: parallel POSTs over a fixed window ──
   try {
-    const upBytes = 8_000_000; // 8 MB
-    const payload = new Uint8Array(upBytes);
-    const start = performance.now();
-    await fetch('https://speed.cloudflare.com/__up', { method: 'POST', body: payload, cache: 'no-store' }).catch(() => null);
+    const STREAMS  = 4;
+    const DURATION = 5000; // ms
+    const chunk    = new Uint8Array(4_000_000); // 4 MB per request
+    let totalBytes = 0;
+    const start    = performance.now();
+    const deadline = start + DURATION;
+
+    const worker = async () => {
+      while (performance.now() < deadline) {
+        try {
+          await fetch('https://speed.cloudflare.com/__up', { method: 'POST', body: chunk, cache: 'no-store' });
+          totalBytes += chunk.length;
+        } catch { break; }
+      }
+    };
+    await Promise.all(Array.from({ length: STREAMS }, worker));
     const seconds = (performance.now() - start) / 1000;
-    if (seconds > 0) upload = parseFloat(((upBytes * 8) / 1e6 / seconds).toFixed(2)); // Mbps
+    if (seconds > 0 && totalBytes > 0) upload = parseFloat(((totalBytes * 8) / 1e6 / seconds).toFixed(1)); // Mbps
   } catch { upload = 0; }
 
   return { download, upload };

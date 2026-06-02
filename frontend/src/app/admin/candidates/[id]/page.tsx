@@ -86,8 +86,10 @@ export default function CandidateProfilePage() {
       setNoteText('');
       await fetchCandidate();
       toast.success('Note added');
-    } catch { toast.error('Failed to add note'); }
-    finally { setAddingNote(false); }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to add note');
+    } finally { setAddingNote(false); }
   };
 
   if (loading) {

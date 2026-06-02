@@ -146,8 +146,20 @@ const addNote = async (req, res, next) => {
     const { note } = req.body;
     if (!note?.trim()) return error(res, 'Note cannot be empty', 422);
 
+    // The author id comes from the JWT. After a DB reset the id can be stale,
+    // which would break the foreign key — resolve a valid user id by email.
+    let userId = req.user.id;
+    const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!exists) {
+      const byEmail = req.user.email
+        ? await prisma.user.findUnique({ where: { email: req.user.email }, select: { id: true } })
+        : null;
+      if (!byEmail) return error(res, 'Your session is no longer valid. Please log out and log in again.', 401);
+      userId = byEmail.id;
+    }
+
     const internalNote = await prisma.internalNote.create({
-      data: { candidateId: req.params.id, userId: req.user.id, note: note.trim() },
+      data: { candidateId: req.params.id, userId, note: note.trim() },
       include: { user: { select: { id: true, name: true } } },
     });
     return success(res, internalNote, 'Note added', 201);
