@@ -26,4 +26,8 @@ router.get('/candidates/:id/notes',    isRecruiter, adminController.getNotes);
 // Export candidates (Admin+)
 router.get('/candidates/export/csv',   isAdmin, adminController.exportCsv);
 
+// Scoring configuration (Admin+)
+router.get('/scoring-config',   isAdmin, adminController.getScoringConfig);
+router.patch('/scoring-config', isAdmin, adminController.updateScoringConfig);
+
 module.exports = router;

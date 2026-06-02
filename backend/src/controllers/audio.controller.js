@@ -2,6 +2,8 @@ const prisma = require('../config/database');
 const storageService = require('../services/storage.service');
 const whisperService = require('../services/whisper.service');
 const filterService  = require('../services/filter.service');
+const scoringService = require('../services/scoring.service');
+const aiService      = require('../services/aiAssessment.service');
 const emailService   = require('../services/email.service');
 const msService      = require('../services/microsoft.service');
 const { success, error } = require('../utils/responseHelper');
@@ -56,39 +58,56 @@ const processAudio = async (req, res, next) => {
 
     const durationSeconds = req.file.size / (16000 * 2); // rough estimate for webm
 
+    // GPT-based fluency assessment (actual AI assessment of the transcript)
+    let aiScore = null;
+    let aiFeedback = null;
+    try {
+      const ai = await aiService.assessFluency(whisperResult.transcript, candidate.selectedLanguage || 'English');
+      if (ai) { aiScore = ai.score; aiFeedback = ai.feedback; }
+    } catch (aiErr) {
+      logger.warn('AI assessment errored', { candidateId, error: aiErr.message });
+    }
+
+    const audioData = {
+      audioUrl,
+      durationSeconds,
+      transcript:            whisperResult.transcript,
+      fluencyScore:          whisperResult.fluencyScore,
+      aiScore,
+      aiFeedback,
+      languageDetected:      whisperResult.languageDetected,
+      whisperRawResponse:    whisperResult.raw,
+      flaggedForHumanReview: whisperResult.flaggedForHumanReview,
+      processedAt:           new Date(),
+    };
+
     // Persist audio recording
     await prisma.audioRecording.upsert({
       where:  { candidateId },
-      create: {
-        candidateId,
-        audioUrl,
-        durationSeconds,
-        transcript:            whisperResult.transcript,
-        fluencyScore:          whisperResult.fluencyScore,
-        languageDetected:      whisperResult.languageDetected,
-        whisperRawResponse:    whisperResult.raw,
-        flaggedForHumanReview: whisperResult.flaggedForHumanReview,
-        processedAt:           new Date(),
-      },
-      update: {
-        audioUrl,
-        durationSeconds,
-        transcript:            whisperResult.transcript,
-        fluencyScore:          whisperResult.fluencyScore,
-        languageDetected:      whisperResult.languageDetected,
-        whisperRawResponse:    whisperResult.raw,
-        flaggedForHumanReview: whisperResult.flaggedForHumanReview,
-        processedAt:           new Date(),
-      },
+      create: { candidateId, ...audioData },
+      update: audioData,
     });
 
-    // Run filter engine
+    // Evaluate: weighted composite scoring for job-based candidates,
+    // legacy filter engine for the original flow.
     const fullCandidate = await prisma.candidate.findUnique({
       where: { id: candidateId },
-      include: { systemCheck: true, audioRecording: true },
+      include: { systemCheck: true, audioRecording: true, job: true },
     });
 
-    const filterResult = filterService.evaluate(fullCandidate);
+    let filterResult;
+    if (fullCandidate.jobId) {
+      const r = await scoringService.evaluate(fullCandidate);
+      filterResult = {
+        filtersApplied:   r.breakdown,
+        rejectionReasons: r.rejectionReasons,
+        qualified:        r.qualified,
+        totalScore:       r.totalScore,
+        scoreBreakdown:   r.breakdown,
+      };
+    } else {
+      filterResult = filterService.evaluate(fullCandidate);
+    }
 
     await prisma.filterResult.upsert({
       where:  { candidateId },
@@ -139,7 +158,8 @@ const processAudio = async (req, res, next) => {
     return success(res, {
       status: finalStatus,
       qualified: filterResult.qualified,
-      fluencyScore: whisperResult.fluencyScore,
+      // For job candidates, surface the weighted total; otherwise the fluency score
+      fluencyScore: filterResult.totalScore ?? whisperResult.fluencyScore,
       transcript: whisperResult.transcript,
       flaggedForHumanReview: whisperResult.flaggedForHumanReview,
     }, filterResult.qualified ? 'Congratulations! You passed Level 1.' : 'Application processed.');

@@ -1,8 +1,80 @@
 'use client';
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { toast } from 'react-toastify';
 import api from '@/lib/api';
-import { CheckCircle, Link as LinkIcon, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
+import type { ScoringConfig } from '@/types';
+import { CheckCircle, Link as LinkIcon, RefreshCw, AlertCircle, Loader2, SlidersHorizontal, Save } from 'lucide-react';
+
+function ScoringCard() {
+  const [cfg, setCfg] = useState<ScoringConfig | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get('/admin/scoring-config').then(({ data }) => setCfg(data.data)).catch(() => {});
+  }, []);
+
+  const set = (k: keyof ScoringConfig, v: number) => setCfg((c) => (c ? { ...c, [k]: v } : c));
+
+  const save = async () => {
+    if (!cfg) return;
+    setSaving(true);
+    try {
+      await api.patch('/admin/scoring-config', cfg);
+      toast.success('Scoring settings saved');
+    } catch { toast.error('Failed to save scoring settings'); }
+    finally { setSaving(false); }
+  };
+
+  const weightSum = cfg ? cfg.weightQuestionnaire + cfg.weightAudio + cfg.weightSpeed + cfg.weightHeadphone : 0;
+
+  const Weight = ({ label, k }: { label: string; k: keyof ScoringConfig }) => (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <input type="number" step="0.05" min="0" max="1" value={cfg ? cfg[k] : 0}
+        onChange={(e) => set(k, Number(e.target.value))}
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+    </div>
+  );
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h2 className="text-lg font-semibold text-gray-800 mb-1 flex items-center gap-2">
+        <SlidersHorizontal size={18} className="text-brand-600" /> Scoring &amp; Pass Mark
+      </h2>
+      <p className="text-sm text-gray-500 mb-4">Set how much each component counts toward a candidate&apos;s overall score, and the pass threshold.</p>
+
+      {!cfg ? (
+        <div className="py-6 text-center"><Loader2 size={22} className="animate-spin text-brand-600 mx-auto" /></div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Weight label="Questionnaire weight" k="weightQuestionnaire" />
+            <Weight label="Audio (AI) weight" k="weightAudio" />
+            <Weight label="Internet speed weight" k="weightSpeed" />
+            <Weight label="Headphone weight" k="weightHeadphone" />
+          </div>
+          <p className={`text-xs mt-2 ${Math.abs(weightSum - 1) < 0.001 ? 'text-gray-400' : 'text-amber-600'}`}>
+            Weights total {weightSum.toFixed(2)} (they are auto-normalised, so they don&apos;t have to sum to exactly 1).
+          </p>
+          <div className="mt-4 max-w-xs">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Pass threshold (%)</label>
+            <input type="number" min="0" max="100" value={cfg.passThreshold}
+              onChange={(e) => set('passThreshold', Number(e.target.value))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            <p className="text-xs text-gray-400 mt-1">A candidate passes if their weighted total is at least this percentage.</p>
+          </div>
+          <div className="flex justify-end mt-5">
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save Scoring
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function SettingsContent() {
   const searchParams = useSearchParams();
@@ -89,6 +161,8 @@ function SettingsContent() {
           )}
         </div>
       </div>
+
+      <ScoringCard />
     </div>
   );
 }

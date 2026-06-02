@@ -1,0 +1,115 @@
+const prisma = require('../config/database');
+
+// ── Questionnaire score from per-option scores defined in the template ──
+// Returns { earned, max, percent } across all scored questions.
+const scoreQuestionnaire = (answers, schema) => {
+  let earned = 0;
+  let max = 0;
+  const fields = (schema?.sections || []).flatMap((s) => s.fields || []);
+
+  for (const f of fields) {
+    const ans = answers?.[f.key];
+    const opt = f.optionScores || null;
+
+    if ((f.type === 'radio' || f.type === 'select') && opt) {
+      const values = Object.values(opt).map(Number).filter(Number.isFinite);
+      const qMax = values.length ? Math.max(...values, 0) : 0;
+      max += qMax;
+      if (typeof ans === 'string' && Number.isFinite(Number(opt[ans]))) earned += Number(opt[ans]);
+    } else if (f.type === 'checkbox' && opt) {
+      const positive = Object.values(opt).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+      const qMax = positive.reduce((a, b) => a + b, 0);
+      max += qMax;
+      if (Array.isArray(ans)) {
+        for (const sel of ans) if (Number.isFinite(Number(opt[sel]))) earned += Number(opt[sel]);
+      }
+    } else if (f.type === 'confirm' && Number(f.score) > 0) {
+      max += Number(f.score);
+      if (ans === 'Yes') earned += Number(f.score);
+    }
+  }
+
+  earned = Math.max(0, Math.min(earned, max));
+  const percent = max > 0 ? (earned / max) * 100 : null; // null = no scored questions
+  return { earned, max, percent };
+};
+
+// ── Speed score (graded against the job's minimums) ──
+const scoreSpeed = (check, minDown, minUp) => {
+  if (!check) return 0;
+  const d = Math.min(check.downloadSpeed / (minDown || 1), 1);
+  const u = Math.min(check.uploadSpeed / (minUp || 1), 1);
+  return Math.round(((d + u) / 2) * 100);
+};
+
+// ── Headphone score (from the questionnaire answer) ──
+const scoreHeadphone = (answers, check) => {
+  if (answers?.hasHeadset === 'Yes') return 100;
+  if (answers?.hasHeadset === 'No') return 0;
+  // fall back to system check speaker/mic if questionnaire didn't ask
+  return check?.speakerPermitted ? 100 : 0;
+};
+
+// ── Audio score (GPT 0–10 → 0–100, else heuristic fluency) ──
+const scoreAudio = (audio) => {
+  if (!audio) return 0;
+  if (Number.isFinite(audio.aiScore)) return Math.round(audio.aiScore * 10);
+  if (Number.isFinite(audio.fluencyScore)) return Math.round(audio.fluencyScore);
+  return 0;
+};
+
+const getConfig = async () => {
+  let cfg = await prisma.scoringConfig.findUnique({ where: { id: 'default' } });
+  if (!cfg) cfg = await prisma.scoringConfig.create({ data: { id: 'default' } });
+  return cfg;
+};
+
+/**
+ * Weighted composite evaluation for a job-based candidate.
+ * Returns { qualified, totalScore, breakdown, rejectionReasons }.
+ */
+const evaluate = async (candidate) => {
+  const cfg = await getConfig();
+  const answers = candidate.questionnaireAnswers || {};
+  const check   = candidate.systemCheck;
+  const audio   = candidate.audioRecording;
+
+  const minDown = candidate.job?.minDownloadSpeed ?? 20;
+  const minUp   = candidate.job?.minUploadSpeed ?? 10;
+
+  // Questionnaire template for this department
+  const template = candidate.department
+    ? await prisma.questionnaireTemplate.findUnique({ where: { department: candidate.department } })
+    : null;
+
+  const q = scoreQuestionnaire(answers, template?.schema);
+  const questionnaireScore = q.percent;            // may be null if nothing scored
+  const audioScore         = scoreAudio(audio);
+  const speedScore         = scoreSpeed(check, minDown, minUp);
+  const headphoneScore     = scoreHeadphone(answers, check);
+
+  // Normalise weights — if questionnaire has no scored questions, drop its weight
+  let { weightQuestionnaire: wq, weightAudio: wa, weightSpeed: ws, weightHeadphone: wh } = cfg;
+  if (questionnaireScore === null) wq = 0;
+  const totalWeight = wq + wa + ws + wh || 1;
+
+  const totalScore = Math.round(
+    ((questionnaireScore ?? 0) * wq + audioScore * wa + speedScore * ws + headphoneScore * wh) / totalWeight,
+  );
+
+  const qualified = totalScore >= cfg.passThreshold;
+
+  const breakdown = {
+    questionnaire: { score: questionnaireScore, earned: q.earned, max: q.max, weight: wq },
+    audio:         { score: audioScore, aiScore: audio?.aiScore ?? null, weight: wa },
+    speed:         { score: speedScore, download: check?.downloadSpeed ?? null, upload: check?.uploadSpeed ?? null, weight: ws },
+    headphone:     { score: headphoneScore, weight: wh },
+    passThreshold: cfg.passThreshold,
+  };
+
+  const rejectionReasons = qualified ? [] : [`Overall score ${totalScore}% is below the passing mark of ${cfg.passThreshold}%`];
+
+  return { qualified, totalScore, breakdown, rejectionReasons };
+};
+
+module.exports = { evaluate, getConfig };

@@ -250,13 +250,20 @@ export default function CandidateProfilePage() {
           <div className="space-y-4">
             <audio src={ar.audioUrl} controls className="w-full" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
-              <Row label="Fluency Score" value={ar.fluencyScore != null ? `${ar.fluencyScore}%` : '–'} />
+              <Row label="AI Fluency (0–10)" value={ar.aiScore != null ? <span className="font-semibold text-brand-700">{ar.aiScore}/10</span> : '–'} />
+              <Row label="Heuristic Score" value={ar.fluencyScore != null ? `${ar.fluencyScore}%` : '–'} />
               <Row label="Language Detected" value={ar.languageDetected ?? '–'} />
               <Row label="Duration" value={ar.durationSeconds ? `${Math.round(ar.durationSeconds)}s` : '–'} />
               <Row label="Human Review" value={ar.flaggedForHumanReview
                 ? <span className="flex items-center gap-1 text-amber-600"><Flag size={14} /> Flagged</span>
                 : 'No'} />
             </div>
+            {ar.aiFeedback && (
+              <div className="bg-brand-50 rounded-xl p-4 border border-brand-100">
+                <p className="text-xs font-semibold text-brand-700 uppercase tracking-wide mb-1">AI Assessment</p>
+                <p className="text-sm text-gray-700 leading-relaxed">{ar.aiFeedback}</p>
+              </div>
+            )}
             {ar.transcript && (
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Whisper Transcript</p>
@@ -267,14 +274,46 @@ export default function CandidateProfilePage() {
         ) : <p className="text-sm text-gray-400">No audio recording</p>}
       </Section>
 
-      {/* Filter Result */}
+      {/* Scoring / Filter Result */}
       {fr && (
-        <Section title="Filter Engine Result" icon={<Wifi size={18} />}>
-          <div className="mb-3 flex items-center gap-2">
-            {fr.qualified
-              ? <><CheckCircle size={18} className="text-green-500" /><span className="font-semibold text-green-700">Qualified</span></>
-              : <><AlertTriangle size={18} className="text-red-500" /><span className="font-semibold text-red-700">Not Qualified</span></>}
+        <Section title="Scoring Result" icon={<Wifi size={18} />}>
+          <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              {fr.qualified
+                ? <><CheckCircle size={18} className="text-green-500" /><span className="font-semibold text-green-700">Qualified</span></>
+                : <><AlertTriangle size={18} className="text-red-500" /><span className="font-semibold text-red-700">Not Qualified</span></>}
+            </div>
+            {fr.totalScore != null && (
+              <span className={`text-2xl font-bold ${fr.qualified ? 'text-green-700' : 'text-red-600'}`}>
+                {fr.totalScore}%
+              </span>
+            )}
           </div>
+
+          {fr.scoreBreakdown && (
+            <div className="space-y-2 mb-3">
+              {([
+                ['Questionnaire', fr.scoreBreakdown.questionnaire],
+                ['Audio (AI)', fr.scoreBreakdown.audio],
+                ['Internet Speed', fr.scoreBreakdown.speed],
+                ['Headphone', fr.scoreBreakdown.headphone],
+              ] as const).map(([label, comp]) => comp && (comp.score != null) && (
+                <div key={label}>
+                  <div className="flex justify-between text-xs text-gray-600 mb-0.5">
+                    <span>{label} <span className="text-gray-400">(weight {comp.weight})</span></span>
+                    <span className="font-medium">{Math.round(comp.score)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-brand-500 rounded-full" style={{ width: `${Math.min(Math.round(comp.score), 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+              {fr.scoreBreakdown.passThreshold != null && (
+                <p className="text-xs text-gray-400 pt-1">Pass threshold: {fr.scoreBreakdown.passThreshold}%</p>
+              )}
+            </div>
+          )}
+
           {fr.rejectionReasons.length > 0 && (
             <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
               {fr.rejectionReasons.map((r, i) => <li key={i}>{r}</li>)}

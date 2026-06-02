@@ -200,6 +200,8 @@ model AudioRecording {
   durationSeconds      Float     @map("duration_seconds")
   transcript           String?
   fluencyScore         Float?    @map("fluency_score")
+  aiScore              Float?    @map("ai_score")        // GPT fluency assessment 0–10
+  aiFeedback           String?   @map("ai_feedback")     // short justification from GPT
   languageDetected     String?   @map("language_detected")
   whisperRawResponse   Json?     @map("whisper_raw_response")
   flaggedForHumanReview Boolean  @default(false) @map("flagged_for_human_review")
@@ -217,11 +219,26 @@ model FilterResult {
   filtersApplied   Json     @map("filters_applied")
   rejectionReasons String[] @map("rejection_reasons")
   qualified        Boolean
+  totalScore       Float?   @map("total_score")        // weighted composite 0–100
+  scoreBreakdown   Json?    @map("score_breakdown")    // sub-scores per component
   createdAt        DateTime @default(now()) @map("created_at")
 
   candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   @@map("filter_results")
+}
+
+// Singleton: weights and pass threshold for the weighted scoring engine
+model ScoringConfig {
+  id                  String   @id @default("default")
+  weightQuestionnaire Float    @default(0.4) @map("weight_questionnaire")
+  weightAudio         Float    @default(0.4) @map("weight_audio")
+  weightSpeed         Float    @default(0.1) @map("weight_speed")
+  weightHeadphone     Float    @default(0.1) @map("weight_headphone")
+  passThreshold       Float    @default(80)  @map("pass_threshold")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("scoring_config")
 }
 
 model EmailLog {

@@ -207,6 +207,14 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove }: {
   const addOption = () => onChange({ options: [...(field.options || []), 'New option'] });
   const removeOption = (oi: number) => onChange({ options: (field.options || []).filter((_, i) => i !== oi) });
 
+  const setOptionScore = (opt: string, value: string) => {
+    const scores = { ...(field.optionScores || {}) };
+    if (value === '') delete scores[opt];
+    else scores[opt] = Number(value);
+    onChange({ optionScores: scores });
+  };
+  const scorable = ['radio', 'select', 'checkbox'].includes(field.type);
+
   return (
     <div className="p-4 hover:bg-gray-50/60">
       <div className="flex items-start gap-2">
@@ -230,11 +238,19 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove }: {
           )}
           {hasOptions && (
             <div className="pl-2 space-y-1.5">
+              {scorable && (
+                <p className="text-[11px] text-gray-400 ml-3">Set points per answer (right box) to make this question count toward the score.</p>
+              )}
               {(field.options || []).map((opt, oi) => (
                 <div key={oi} className="flex gap-2 items-center">
                   <span className="text-gray-300 text-xs">•</span>
                   <input value={opt} onChange={(e) => setOption(oi, e.target.value)}
                     className="flex-1 rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                  {scorable && (
+                    <input type="number" value={field.optionScores?.[opt] ?? ''} onChange={(e) => setOptionScore(opt, e.target.value)}
+                      title="Points for this answer" placeholder="pts"
+                      className="w-14 rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                  )}
                   <button onClick={() => removeOption(oi)} className="text-red-300 hover:text-red-500"><Trash2 size={13} /></button>
                 </div>
               ))}
@@ -245,11 +261,18 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove }: {
           )}
 
           {/* Meta row */}
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={!!field.required} onChange={(e) => onChange({ required: e.target.checked })} className="accent-brand-600" />
               Required
             </label>
+            {field.type === 'confirm' && (
+              <label className="flex items-center gap-1.5">
+                Points if confirmed:
+                <input type="number" value={field.score ?? ''} onChange={(e) => onChange({ score: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  className="w-16 rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+              </label>
+            )}
             {(field.type === 'text' || field.type === 'textarea' || field.type === 'number') && (
               <input value={field.placeholder || ''} onChange={(e) => onChange({ placeholder: e.target.value })}
                 placeholder="Placeholder (optional)" className="rounded border border-gray-200 px-2 py-1 text-xs flex-1 max-w-[260px] focus:outline-none" />

@@ -257,4 +257,36 @@ const generateTeamsLink = async (req, res, next) => {
   }
 };
 
-module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, assignRecruiter, deleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink };
+// ── Scoring configuration (weights + pass threshold) ──────────
+const getScoringConfig = async (_req, res, next) => {
+  try {
+    let cfg = await prisma.scoringConfig.findUnique({ where: { id: 'default' } });
+    if (!cfg) cfg = await prisma.scoringConfig.create({ data: { id: 'default' } });
+    return success(res, cfg);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const updateScoringConfig = async (req, res, next) => {
+  try {
+    const { weightQuestionnaire, weightAudio, weightSpeed, weightHeadphone, passThreshold } = req.body;
+    const data = {};
+    if (weightQuestionnaire !== undefined) data.weightQuestionnaire = Number(weightQuestionnaire);
+    if (weightAudio !== undefined)         data.weightAudio = Number(weightAudio);
+    if (weightSpeed !== undefined)         data.weightSpeed = Number(weightSpeed);
+    if (weightHeadphone !== undefined)     data.weightHeadphone = Number(weightHeadphone);
+    if (passThreshold !== undefined)       data.passThreshold = Number(passThreshold);
+
+    const cfg = await prisma.scoringConfig.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', ...data },
+      update: data,
+    });
+    return success(res, cfg, 'Scoring settings updated');
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, assignRecruiter, deleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink, getScoringConfig, updateScoringConfig };

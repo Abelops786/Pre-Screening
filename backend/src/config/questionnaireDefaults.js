@@ -32,9 +32,12 @@ sid = 0;
 const CUSTOMER_SERVICE = {
   sections: [
     section('English & Communication Skills', [
-      radio('englishProficiency', 'English proficiency level', ['Native', 'Near-native / Fluent', 'Intermediate']),
-      yesno('workedEnglishEnv', 'Worked in an English-speaking environment before?'),
-      radio('comfortSpeakingEnglish', 'Comfort speaking with customers all day in English?', ['Very comfortable', 'Somewhat comfortable', 'Not comfortable']),
+      radio('englishProficiency', 'English proficiency level', ['Native', 'Near-native / Fluent', 'Intermediate'],
+        { optionScores: { 'Native': 10, 'Near-native / Fluent': 8, 'Intermediate': 4 } }),
+      yesno('workedEnglishEnv', 'Worked in an English-speaking environment before?',
+        { optionScores: { 'Yes': 5, 'No': 0 } }),
+      radio('comfortSpeakingEnglish', 'Comfort speaking with customers all day in English?', ['Very comfortable', 'Somewhat comfortable', 'Not comfortable'],
+        { optionScores: { 'Very comfortable': 10, 'Somewhat comfortable': 6, 'Not comfortable': 2 } }),
     ]),
     section('Voice Recording (Mandatory)', [
       vocaroo('vocarooUrl', 'Paste your Vocaroo recording link', {

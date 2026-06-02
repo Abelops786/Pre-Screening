@@ -37,8 +37,18 @@ export interface QField {
   protected?: boolean;
   script?: string;
   guidance?: string;
+  score?: number;                          // for confirm: points awarded when confirmed
+  optionScores?: Record<string, number>;   // for radio/select/checkbox: points per option
   showIf?: { key?: string; equals?: string; includes?: string; jobPositionType?: string; jobRoleType?: string };
   hideIfJobHas?: string;
+}
+
+export interface ScoringConfig {
+  weightQuestionnaire: number;
+  weightAudio: number;
+  weightSpeed: number;
+  weightHeadphone: number;
+  passThreshold: number;
 }
 
 export interface QSection {
@@ -109,16 +119,28 @@ export interface AudioRecording {
   durationSeconds: number;
   transcript: string | null;
   fluencyScore: number | null;
+  aiScore?: number | null;
+  aiFeedback?: string | null;
   languageDetected: string | null;
   flaggedForHumanReview: boolean;
   processedAt: string | null;
 }
 
+export interface ScoreBreakdown {
+  questionnaire?: { score: number | null; earned: number; max: number; weight: number };
+  audio?: { score: number; aiScore: number | null; weight: number };
+  speed?: { score: number; download: number | null; upload: number | null; weight: number };
+  headphone?: { score: number; weight: number };
+  passThreshold?: number;
+}
+
 export interface FilterResult {
   id: string;
-  filtersApplied: unknown[];
+  filtersApplied: unknown;
   rejectionReasons: string[];
   qualified: boolean;
+  totalScore?: number | null;
+  scoreBreakdown?: ScoreBreakdown | null;
 }
 
 export interface InternalNote {
