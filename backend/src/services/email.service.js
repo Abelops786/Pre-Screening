@@ -27,10 +27,16 @@ const logEmail = async (candidateId, emailType, success, errorMessage = null) =>
   }
 };
 
+// Most SMTP providers (incl. Hostinger) reject mail whose "From" address is not
+// the authenticated mailbox. Default the sender to SMTP_USER so it always matches.
+const fromAddress = () =>
+  process.env.EMAIL_FROM
+  || (process.env.SMTP_USER ? `Recruitment <${process.env.SMTP_USER}>` : 'Recruitment <noreply@company.com>');
+
 const send = async (to, subject, html, candidateId, emailType) => {
   try {
     await getTransporter().sendMail({
-      from: process.env.EMAIL_FROM || 'Recruitment <noreply@company.com>',
+      from: fromAddress(),
       to,
       subject,
       html,
