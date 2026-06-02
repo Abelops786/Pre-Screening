@@ -1,48 +1,48 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
-import { Loader2, AlertCircle, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Loader2, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, Check } from 'lucide-react';
 import type { Job, QSection, QField, QuestionnaireSchema } from '@/types';
 import { INTERPRETATION_LANGUAGES } from '@/types';
 
 const cls = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition';
 const STEP_SIZE = 3;
 
-// Country / area dial codes for the phone field
-const COUNTRY_CODES: { code: string; label: string; flag: string }[] = [
-  { code: '+1',   label: 'US / Canada',     flag: '🇺🇸' },
-  { code: '+44',  label: 'United Kingdom',  flag: '🇬🇧' },
-  { code: '+61',  label: 'Australia',       flag: '🇦🇺' },
-  { code: '+91',  label: 'India',           flag: '🇮🇳' },
-  { code: '+92',  label: 'Pakistan',        flag: '🇵🇰' },
-  { code: '+63',  label: 'Philippines',     flag: '🇵🇭' },
-  { code: '+52',  label: 'Mexico',          flag: '🇲🇽' },
-  { code: '+55',  label: 'Brazil',          flag: '🇧🇷' },
-  { code: '+34',  label: 'Spain',           flag: '🇪🇸' },
-  { code: '+33',  label: 'France',          flag: '🇫🇷' },
-  { code: '+49',  label: 'Germany',         flag: '🇩🇪' },
-  { code: '+39',  label: 'Italy',           flag: '🇮🇹' },
-  { code: '+351', label: 'Portugal',        flag: '🇵🇹' },
-  { code: '+1',   label: 'Jamaica',         flag: '🇯🇲' },
-  { code: '+254', label: 'Kenya',           flag: '🇰🇪' },
-  { code: '+234', label: 'Nigeria',         flag: '🇳🇬' },
-  { code: '+27',  label: 'South Africa',    flag: '🇿🇦' },
-  { code: '+20',  label: 'Egypt',           flag: '🇪🇬' },
-  { code: '+971', label: 'UAE',             flag: '🇦🇪' },
-  { code: '+966', label: 'Saudi Arabia',    flag: '🇸🇦' },
-  { code: '+90',  label: 'Turkey',          flag: '🇹🇷' },
-  { code: '+7',   label: 'Russia',          flag: '🇷🇺' },
-  { code: '+86',  label: 'China',           flag: '🇨🇳' },
-  { code: '+62',  label: 'Indonesia',       flag: '🇮🇩' },
-  { code: '+84',  label: 'Vietnam',         flag: '🇻🇳' },
-  { code: '+880', label: 'Bangladesh',      flag: '🇧🇩' },
-  { code: '+93',  label: 'Afghanistan',     flag: '🇦🇫' },
-  { code: '+251', label: 'Ethiopia',        flag: '🇪🇹' },
-  { code: '+252', label: 'Somalia',         flag: '🇸🇴' },
-  { code: '+509', label: 'Haiti',           flag: '🇭🇹' },
+// Country / area dial codes for the phone field (iso = flagcdn image code)
+const COUNTRY_CODES: { code: string; label: string; iso: string }[] = [
+  { code: '+1',   label: 'US / Canada',    iso: 'us' },
+  { code: '+44',  label: 'United Kingdom', iso: 'gb' },
+  { code: '+61',  label: 'Australia',      iso: 'au' },
+  { code: '+91',  label: 'India',          iso: 'in' },
+  { code: '+92',  label: 'Pakistan',       iso: 'pk' },
+  { code: '+63',  label: 'Philippines',    iso: 'ph' },
+  { code: '+52',  label: 'Mexico',         iso: 'mx' },
+  { code: '+55',  label: 'Brazil',         iso: 'br' },
+  { code: '+34',  label: 'Spain',          iso: 'es' },
+  { code: '+33',  label: 'France',         iso: 'fr' },
+  { code: '+49',  label: 'Germany',        iso: 'de' },
+  { code: '+39',  label: 'Italy',          iso: 'it' },
+  { code: '+351', label: 'Portugal',       iso: 'pt' },
+  { code: '+1',   label: 'Jamaica',        iso: 'jm' },
+  { code: '+254', label: 'Kenya',          iso: 'ke' },
+  { code: '+234', label: 'Nigeria',        iso: 'ng' },
+  { code: '+27',  label: 'South Africa',   iso: 'za' },
+  { code: '+20',  label: 'Egypt',          iso: 'eg' },
+  { code: '+971', label: 'UAE',            iso: 'ae' },
+  { code: '+966', label: 'Saudi Arabia',   iso: 'sa' },
+  { code: '+90',  label: 'Turkey',         iso: 'tr' },
+  { code: '+7',   label: 'Russia',         iso: 'ru' },
+  { code: '+86',  label: 'China',          iso: 'cn' },
+  { code: '+62',  label: 'Indonesia',      iso: 'id' },
+  { code: '+84',  label: 'Vietnam',        iso: 'vn' },
+  { code: '+880', label: 'Bangladesh',     iso: 'bd' },
+  { code: '+93',  label: 'Afghanistan',    iso: 'af' },
+  { code: '+251', label: 'Ethiopia',       iso: 'et' },
+  { code: '+252', label: 'Somalia',        iso: 'so' },
+  { code: '+509', label: 'Haiti',          iso: 'ht' },
 ];
 
 type Answers = Record<string, string | string[]>;
@@ -315,36 +315,70 @@ function FieldWrap({ label, children, req }: { label: string; children: React.Re
   );
 }
 
-// Phone input with a country / area code dropdown. The combined value
-// "<dial> <number>" is stored as the candidate's phone.
+// Flag image from flagcdn (renders real flags on every OS, unlike emoji flags)
+function Flag({ iso }: { iso: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`https://flagcdn.com/24x18/${iso}.png`}
+      srcSet={`https://flagcdn.com/48x36/${iso}.png 2x`}
+      width={20} height={15} alt=""
+      className="rounded-sm shrink-0 object-cover"
+    />
+  );
+}
+
+// Phone input with a flag-based country / area code dropdown. The combined
+// value "<dial> <number>" is stored as the candidate's phone.
 function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  // Parse an existing value: leading "+<digits>" is the dial code, the rest is the number
   const parse = (v: string): { dial: string; num: string } => {
     const m = (v || '').match(/^(\+\d{1,4})\s*(.*)$/);
     if (m) return { dial: m[1], num: m[2] };
     return { dial: '+1', num: v || '' };
   };
-  const [dial, setDial] = useState(() => parse(value).dial);
-  const [num,  setNum]  = useState(() => parse(value).num);
+  const init = parse(value);
+  const initIdx = COUNTRY_CODES.findIndex((c) => c.code === init.dial);
+  const [idx,  setIdx]  = useState(initIdx === -1 ? 0 : initIdx);
+  const [num,  setNum]  = useState(init.num);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const emit = (d: string, n: string) => onChange(n.trim() ? `${d} ${n.trim()}` : '');
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const emit = (i: number, n: string) => onChange(n.trim() ? `${COUNTRY_CODES[i].code} ${n.trim()}` : '');
+  const sel = COUNTRY_CODES[idx];
 
   return (
     <div className="flex gap-2">
-      <select
-        value={dial}
-        onChange={(e) => { setDial(e.target.value); emit(e.target.value, num); }}
-        className="rounded-lg border border-gray-300 px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 max-w-[7.5rem]"
-        aria-label="Country code"
-      >
-        {COUNTRY_CODES.map((c, i) => (
-          <option key={`${c.code}-${i}`} value={c.code}>{c.flag} {c.code}</option>
-        ))}
-      </select>
+      <div ref={ref} className="relative">
+        <button type="button" onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-2.5 text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 h-full">
+          <Flag iso={sel.iso} />
+          <span className="text-gray-700">{sel.code}</span>
+          <ChevronDown size={14} className="text-gray-400" />
+        </button>
+        {open && (
+          <div className="absolute z-30 mt-1 w-60 max-h-64 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+            {COUNTRY_CODES.map((c, i) => (
+              <button type="button" key={`${c.iso}-${i}`}
+                onClick={() => { setIdx(i); setOpen(false); emit(i, num); }}
+                className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-brand-50 ${i === idx ? 'bg-brand-50' : ''}`}>
+                <Flag iso={c.iso} />
+                <span className="flex-1 text-gray-700 truncate">{c.label}</span>
+                <span className="text-gray-400">{c.code}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <input
         type="tel"
         value={num}
-        onChange={(e) => { setNum(e.target.value); emit(dial, e.target.value); }}
+        onChange={(e) => { setNum(e.target.value); emit(idx, e.target.value); }}
         className={`${cls} flex-1`}
         placeholder="555 000 0000"
       />
