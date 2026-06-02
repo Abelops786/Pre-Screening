@@ -130,7 +130,9 @@ const processAudio = async (req, res, next) => {
       }
       emailService.sendLevel1Pass(updatedCandidate, teamsLink).catch(() => {});
     } else {
-      emailService.sendRejection(updatedCandidate, filterResult.rejectionReasons).catch(() => {});
+      // Neutral "under review" email — never tell the candidate they failed.
+      // The recruiter still sees the real REJECTED status in the dashboard.
+      emailService.sendUnderReview(updatedCandidate).catch(() => {});
     }
 
     return success(res, {

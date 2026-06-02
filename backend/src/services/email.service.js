@@ -125,4 +125,16 @@ const sendLevel1Pass = async (candidate, teamsLink = null) => {
   return send(candidate.email, 'Congratulations – Level 1 Passed! | TalentScreen', html, candidate.id, 'level1_pass');
 };
 
-module.exports = { sendConfirmation, sendRejection, sendLevel1Pass };
+// Neutral email for candidates who did not auto-pass — never indicates a "fail"
+const sendUnderReview = async (candidate) => {
+  const html = base(`
+    <p>Dear <strong>${candidate.fullName}</strong>,</p>
+    <p>Thank you for completing your application and screening submission.</p>
+    <p>Your responses have been received and are now <strong>under review</strong> by our team. We will be in touch by email regarding the next steps.</p>
+    <p>We appreciate the time you took to apply.</p>
+    <p>Best regards,<br>The Recruitment Team</p>
+  `);
+  return send(candidate.email, 'Application Received – Under Review', html, candidate.id, 'under_review');
+};
+
+module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview };
