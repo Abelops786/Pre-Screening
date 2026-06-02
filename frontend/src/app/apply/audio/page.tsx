@@ -238,21 +238,14 @@ function AudioContent() {
                     </div>
                   )}
                 </>
-              ) : result.flaggedForHumanReview ? (
-                <>
-                  <div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mx-auto">
-                    <span className="text-3xl">🔍</span>
-                  </div>
-                  <h2 className="text-xl font-bold text-yellow-700">Under Review</h2>
-                  <p className="text-gray-600 text-sm">Your audio is being reviewed by our team. You will receive an email with the outcome.</p>
-                </>
               ) : (
+                /* Neutral message for everyone who did not auto-pass — never indicate a "fail" */
                 <>
-                  <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto">
-                    <span className="text-3xl">📋</span>
+                  <div className="w-16 h-16 rounded-full bg-brand-50 flex items-center justify-center mx-auto">
+                    <span className="text-3xl">📨</span>
                   </div>
-                  <h2 className="text-xl font-bold text-red-700">Not Progressed</h2>
-                  <p className="text-gray-600 text-sm">Thank you for applying. Unfortunately, your application did not meet the minimum requirements. You will receive details via email.</p>
+                  <h2 className="text-xl font-bold text-gray-900">Submission Complete</h2>
+                  <p className="text-gray-600 text-sm">Thank you! Your responses have been received and are now under review. Our team will be in touch by email regarding the next steps.</p>
                 </>
               )}
               <button

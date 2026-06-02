@@ -11,6 +11,40 @@ import { INTERPRETATION_LANGUAGES } from '@/types';
 const cls = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition';
 const STEP_SIZE = 3;
 
+// Country / area dial codes for the phone field
+const COUNTRY_CODES: { code: string; label: string; flag: string }[] = [
+  { code: '+1',   label: 'US / Canada',     flag: '🇺🇸' },
+  { code: '+44',  label: 'United Kingdom',  flag: '🇬🇧' },
+  { code: '+61',  label: 'Australia',       flag: '🇦🇺' },
+  { code: '+91',  label: 'India',           flag: '🇮🇳' },
+  { code: '+92',  label: 'Pakistan',        flag: '🇵🇰' },
+  { code: '+63',  label: 'Philippines',     flag: '🇵🇭' },
+  { code: '+52',  label: 'Mexico',          flag: '🇲🇽' },
+  { code: '+55',  label: 'Brazil',          flag: '🇧🇷' },
+  { code: '+34',  label: 'Spain',           flag: '🇪🇸' },
+  { code: '+33',  label: 'France',          flag: '🇫🇷' },
+  { code: '+49',  label: 'Germany',         flag: '🇩🇪' },
+  { code: '+39',  label: 'Italy',           flag: '🇮🇹' },
+  { code: '+351', label: 'Portugal',        flag: '🇵🇹' },
+  { code: '+1',   label: 'Jamaica',         flag: '🇯🇲' },
+  { code: '+254', label: 'Kenya',           flag: '🇰🇪' },
+  { code: '+234', label: 'Nigeria',         flag: '🇳🇬' },
+  { code: '+27',  label: 'South Africa',    flag: '🇿🇦' },
+  { code: '+20',  label: 'Egypt',           flag: '🇪🇬' },
+  { code: '+971', label: 'UAE',             flag: '🇦🇪' },
+  { code: '+966', label: 'Saudi Arabia',    flag: '🇸🇦' },
+  { code: '+90',  label: 'Turkey',          flag: '🇹🇷' },
+  { code: '+7',   label: 'Russia',          flag: '🇷🇺' },
+  { code: '+86',  label: 'China',           flag: '🇨🇳' },
+  { code: '+62',  label: 'Indonesia',       flag: '🇮🇩' },
+  { code: '+84',  label: 'Vietnam',         flag: '🇻🇳' },
+  { code: '+880', label: 'Bangladesh',      flag: '🇧🇩' },
+  { code: '+93',  label: 'Afghanistan',     flag: '🇦🇫' },
+  { code: '+251', label: 'Ethiopia',        flag: '🇪🇹' },
+  { code: '+252', label: 'Somalia',         flag: '🇸🇴' },
+  { code: '+509', label: 'Haiti',           flag: '🇭🇹' },
+];
+
 type Answers = Record<string, string | string[]>;
 
 export default function JobApplyPage() {
@@ -219,7 +253,7 @@ export default function JobApplyPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FieldWrap label="Full Name" req><input value={info.fullName} onChange={(e) => setInfoField('fullName')(e.target.value)} className={cls} placeholder="John Smith" /></FieldWrap>
                     <FieldWrap label="Email Address" req><input type="email" value={info.email} onChange={(e) => setInfoField('email')(e.target.value)} className={cls} placeholder="john@example.com" /></FieldWrap>
-                    <FieldWrap label="Phone / WhatsApp" req><input value={info.phone} onChange={(e) => setInfoField('phone')(e.target.value)} className={cls} placeholder="+1 555 000 0000" /></FieldWrap>
+                    <FieldWrap label="Phone / WhatsApp" req><PhoneInput value={info.phone} onChange={setInfoField('phone')} /></FieldWrap>
                     <FieldWrap label="City / Country" req><input value={info.location} onChange={(e) => setInfoField('location')(e.target.value)} className={cls} placeholder="New York, USA" /></FieldWrap>
                   </div>
                 ) : (
@@ -277,6 +311,43 @@ function FieldWrap({ label, children, req }: { label: string; children: React.Re
     <div className="space-y-1">
       <label className="block text-sm font-medium text-gray-700">{label}{req && <span className="text-red-500 ml-0.5">*</span>}</label>
       {children}
+    </div>
+  );
+}
+
+// Phone input with a country / area code dropdown. The combined value
+// "<dial> <number>" is stored as the candidate's phone.
+function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  // Parse an existing value: leading "+<digits>" is the dial code, the rest is the number
+  const parse = (v: string): { dial: string; num: string } => {
+    const m = (v || '').match(/^(\+\d{1,4})\s*(.*)$/);
+    if (m) return { dial: m[1], num: m[2] };
+    return { dial: '+1', num: v || '' };
+  };
+  const [dial, setDial] = useState(() => parse(value).dial);
+  const [num,  setNum]  = useState(() => parse(value).num);
+
+  const emit = (d: string, n: string) => onChange(n.trim() ? `${d} ${n.trim()}` : '');
+
+  return (
+    <div className="flex gap-2">
+      <select
+        value={dial}
+        onChange={(e) => { setDial(e.target.value); emit(e.target.value, num); }}
+        className="rounded-lg border border-gray-300 px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 max-w-[7.5rem]"
+        aria-label="Country code"
+      >
+        {COUNTRY_CODES.map((c, i) => (
+          <option key={`${c.code}-${i}`} value={c.code}>{c.flag} {c.code}</option>
+        ))}
+      </select>
+      <input
+        type="tel"
+        value={num}
+        onChange={(e) => { setNum(e.target.value); emit(dial, e.target.value); }}
+        className={`${cls} flex-1`}
+        placeholder="555 000 0000"
+      />
     </div>
   );
 }
