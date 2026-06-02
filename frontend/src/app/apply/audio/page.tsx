@@ -8,7 +8,7 @@ import { Mic, Square, Upload, Loader2, RefreshCw, Clock } from 'lucide-react';
 const MAX_SECONDS = 120;
 const MIN_SECONDS = 15;
 
-const PROMPT = `Please speak clearly for 1–2 minutes on the following topic:
+const PROMPT = `Please speak clearly for at least 15 seconds on the following topic:
 
 "Tell us about your most recent work experience, your key responsibilities, and what you feel makes you a strong candidate for this role."
 
