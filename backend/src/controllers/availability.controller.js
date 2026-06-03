@@ -173,7 +173,24 @@ const bookSlot = async (req, res, next) => {
       data: { candidateId, recruiterId: recruiter.id, scheduledTime: when, msTeamsLink: teamsLink },
     });
 
+    // Confirm to the candidate
     emailService.sendInterviewBooked?.(candidate, when, teamsLink).catch(() => {});
+
+    // Notify the assigned recruiter and all admins
+    try {
+      const staff = await prisma.user.findMany({
+        where: { isActive: true, OR: [{ id: recruiter.id }, { role: { in: ['SUPER_ADMIN', 'ADMIN'] } }] },
+        select: { email: true, name: true },
+      });
+      const seen = new Set();
+      for (const s of staff) {
+        if (!s.email || seen.has(s.email)) continue;
+        seen.add(s.email);
+        emailService.sendStaffInterviewNotice(s.email, s.name, candidate, when, teamsLink).catch(() => {});
+      }
+    } catch (notifyErr) {
+      logger.warn('Could not notify staff of booking', { error: notifyErr.message });
+    }
 
     return success(res, { scheduledTime: interview.scheduledTime, teamsLink }, 'Interview booked', 201);
   } catch (err) {

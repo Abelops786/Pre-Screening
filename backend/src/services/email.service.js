@@ -157,6 +157,29 @@ const sendInterviewBooked = async (candidate, scheduledTime, teamsLink = null) =
   return send(candidate.email, 'Your Interview is Scheduled', html, candidate.id, 'interview_booked');
 };
 
+// Notify a staff member (recruiter / admin) that a candidate booked an interview
+const sendStaffInterviewNotice = async (to, staffName, candidate, scheduledTime, teamsLink = null) => {
+  const when = new Date(scheduledTime).toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+  const joinSection = teamsLink
+    ? `<p style="margin:16px 0"><a href="${teamsLink}" style="display:inline-block;background:#105279;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Join Microsoft Teams</a></p>`
+    : '';
+  const html = base(`
+    <p>Hi <strong>${staffName || 'there'}</strong>,</p>
+    <p>An interview has just been booked.</p>
+    <ul>
+      <li><strong>Candidate:</strong> ${candidate.fullName} (${candidate.email})</li>
+      <li><strong>Phone:</strong> ${candidate.phone || '—'}</li>
+      <li><strong>When:</strong> ${when}</li>
+    </ul>
+    ${joinSection}
+    <p>You can review the candidate in the admin portal.</p>
+    <p>Best regards,<br>TalentScreen</p>
+  `);
+  return send(to, `New Interview Booked – ${candidate.fullName}`, html, candidate.id, 'staff_interview_notice');
+};
+
 // Neutral email for candidates who did not auto-pass — never indicates a "fail"
 const sendUnderReview = async (candidate) => {
   const html = base(`
@@ -169,4 +192,4 @@ const sendUnderReview = async (candidate) => {
   return send(candidate.email, 'Application Received – Under Review', html, candidate.id, 'under_review');
 };
 
-module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview, sendInterviewBooked };
+module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview, sendInterviewBooked, sendStaffInterviewNotice };
