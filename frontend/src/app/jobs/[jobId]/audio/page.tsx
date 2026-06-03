@@ -21,11 +21,26 @@ function AudioContent() {
 
   // Reading task in the job's language (fetched below)
   const [task, setTask] = useState<ReadingTask>(() => getReadingTask('English'));
+  
   useEffect(() => {
-    api.get(`/jobs/public/${jobId}`)
-      .then(({ data }) => setTask(getReadingTask(data.data.language)))
-      .catch(() => {});
-  }, [jobId]);
+    const fetchLanguageTask = async () => {
+      try {
+        const [jobRes, candRes] = await Promise.all([
+          api.get(`/jobs/public/${jobId}`),
+          candidateId ? api.get(`/candidates/public/${candidateId}/language`).catch(() => null) : Promise.resolve(null)
+        ]);
+        
+        const candLang = candRes?.data?.data?.language;
+        const jobLang = jobRes?.data?.data?.language;
+        
+        setTask(getReadingTask(candLang || jobLang || 'English'));
+      } catch (err) {
+        // Fallback to English if job fetch fails
+      }
+    };
+    
+    fetchLanguageTask();
+  }, [jobId, candidateId]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef        = useRef<Blob[]>([]);

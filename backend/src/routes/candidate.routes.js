@@ -22,4 +22,7 @@ router.post('/:id/system-check', candidateController.saveSystemCheck);
 // Public endpoint – job-based department application
 router.post('/job/:jobId', candidateController.submitJobApplication);
 
+// Public endpoint - get candidate language
+router.get('/public/:id/language', candidateController.getCandidateLanguage);
+
 module.exports = router;

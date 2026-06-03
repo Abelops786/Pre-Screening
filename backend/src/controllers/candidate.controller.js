@@ -99,6 +99,18 @@ const submitJobApplication = async (req, res, next) => {
 
     const jobId = job.id; // Use the real DB id, never the slug
 
+    // Try to extract language from questionnaire
+    let extractedLanguage = null;
+    if (questionnaireAnswers) {
+      const keys = Object.keys(questionnaireAnswers);
+      const langKey = keys.find(k => k.toLowerCase() === 'language' || k.toLowerCase() === 'targetlanguage' || k.toLowerCase() === 'languagepair');
+      if (langKey) {
+        const val = questionnaireAnswers[langKey];
+        if (typeof val === 'string') extractedLanguage = val;
+        else if (Array.isArray(val) && val.length > 0) extractedLanguage = val[0];
+      }
+    }
+
     const createCandidate = (extraData = {}) => prisma.candidate.create({
       data: {
         fullName, email, phone, location,
@@ -107,6 +119,7 @@ const submitJobApplication = async (req, res, next) => {
         vocarooUrl: vocarooUrl || null,
         questionnaireAnswers: questionnaireAnswers || {},
         certifications: [],
+        selectedLanguage: extractedLanguage,
         status: 'PENDING',
         ...extraData,
       },
@@ -120,6 +133,7 @@ const submitJobApplication = async (req, res, next) => {
         jobId,
         vocarooUrl: vocarooUrl || null,
         questionnaireAnswers: questionnaireAnswers || {},
+        selectedLanguage: extractedLanguage,
         status: 'PENDING',
         autoDisqualifyReason: null,
       },
@@ -238,4 +252,31 @@ const saveSystemCheck = async (req, res, next) => {
   }
 };
 
-module.exports = { submit, submitJobApplication, saveSystemCheck };
+const getCandidateLanguage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const candidate = await prisma.candidate.findUnique({
+      where: { id },
+      select: { selectedLanguage: true, questionnaireAnswers: true }
+    });
+    
+    if (!candidate) return error(res, 'Candidate not found', 404);
+
+    let language = candidate.selectedLanguage;
+    if (!language && candidate.questionnaireAnswers) {
+      const keys = Object.keys(candidate.questionnaireAnswers);
+      const langKey = keys.find(k => k.toLowerCase() === 'language' || k.toLowerCase() === 'targetlanguage' || k.toLowerCase() === 'languagepair');
+      if (langKey) {
+        const val = candidate.questionnaireAnswers[langKey];
+        if (typeof val === 'string') language = val;
+        else if (Array.isArray(val) && val.length > 0) language = val[0];
+      }
+    }
+
+    return success(res, { language }, 'Candidate language retrieved');
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { submit, submitJobApplication, saveSystemCheck, getCandidateLanguage };
