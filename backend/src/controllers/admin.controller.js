@@ -228,13 +228,21 @@ const generateTeamsLink = async (req, res, next) => {
       where: { role: 'SUPER_ADMIN', msRefreshToken: { not: null } },
     });
     if (!admin?.msRefreshToken) {
-      return error(res, 'Microsoft account not connected. Go to Settings and click Connect Microsoft.', 503);
+      return error(res, 'Microsoft is not connected. Go to Settings → Connect Microsoft.', 503);
     }
 
-    const meeting = await msService.createOnlineMeetingWithRefresh(
-      admin.msRefreshToken,
-      `TalentScreen Interview – ${candidate.fullName}`,
-    );
+    let meeting;
+    try {
+      meeting = await msService.createOnlineMeetingWithRefresh(
+        admin.msRefreshToken,
+        `TalentScreen Interview – ${candidate.fullName}`,
+      );
+    } catch (msErr) {
+      // The stored token is stale/invalid (e.g. connected before the refresh-token
+      // fix). Clear it so Settings shows "Not connected" and prompt a reconnect.
+      await prisma.user.update({ where: { id: admin.id }, data: { msAccessToken: null, msRefreshToken: null } }).catch(() => {});
+      return error(res, 'Microsoft connection has expired. Please go to Settings → Connect Microsoft and reconnect, then try again.', 503);
+    }
     const teamsLink = meeting.joinWebUrl || meeting.joinUrl;
 
     const existing = await prisma.interview.findFirst({ where: { candidateId: req.params.id } });

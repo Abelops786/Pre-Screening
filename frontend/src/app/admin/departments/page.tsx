@@ -53,7 +53,7 @@ export default function DepartmentsPage() {
       setShowForm(false);
       fetchDepartments();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg || 'Failed to save department');
     } finally { setSaving(false); }
   };

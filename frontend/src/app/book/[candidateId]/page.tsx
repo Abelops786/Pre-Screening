@@ -47,7 +47,7 @@ export default function BookingPage() {
       setBooked({ scheduledTime: data.data.scheduledTime, teamsLink: data.data.teamsLink });
       toast.success('Interview booked!');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg || 'Failed to book. Please try another slot.');
       load();
     } finally { setBooking(null); }

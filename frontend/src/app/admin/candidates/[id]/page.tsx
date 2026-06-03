@@ -61,7 +61,7 @@ export default function CandidateProfilePage() {
       setTeamsLink(data.data.teamsLink);
       toast.success('Teams meeting link generated!');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg || 'Failed to generate Teams link');
     } finally {
       setGeneratingLink(false);

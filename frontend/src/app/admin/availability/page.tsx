@@ -32,7 +32,7 @@ export default function AvailabilityPage() {
       toast.success('Availability added');
       fetchSlots();
     } catch (err: unknown) {
-      toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to add');
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to add');
     } finally { setSaving(false); }
   };
 
