@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
-import { Loader2, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, Check } from 'lucide-react';
+import { Loader2, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, Check, Upload } from 'lucide-react';
 import type { Job, QSection, QField, QuestionnaireSchema } from '@/types';
 import { INTERPRETATION_LANGUAGES } from '@/types';
 import { COUNTRY_CODES } from '@/lib/countryCodes';
@@ -27,6 +27,10 @@ export default function JobApplyPage() {
 
   const [info,    setInfo]    = useState({ fullName: '', email: '', phone: '', location: '' });
   const [answers, setAnswers] = useState<Answers>({});
+  const [cvFile,   setCvFile]   = useState<File | null>(null);
+  const [certFile, setCertFile] = useState<File | null>(null);
+  const cvInputRef   = useRef<HTMLInputElement>(null);
+  const certInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let dept = '';
@@ -93,6 +97,7 @@ export default function JobApplyPage() {
         if (!info.email.trim()) return 'Email is required';
         if (!info.phone.trim()) return 'Phone is required';
         if (!info.location.trim()) return 'Location is required';
+        if (!cvFile) return 'Please upload your CV / Resume';
       } else {
         for (const f of visibleFields(item.sec)) {
           if (!f.required) continue;
@@ -130,6 +135,17 @@ export default function JobApplyPage() {
         vocarooUrl,
       });
       const { candidateId, autoDisqualified, reason } = data.data;
+
+      // Upload CV / certificate (best-effort, non-blocking)
+      if (candidateId && (cvFile || certFile)) {
+        try {
+          const fd = new FormData();
+          if (cvFile) fd.append('cv', cvFile);
+          if (certFile) fd.append('certificate', certFile);
+          await api.post(`/upload/${candidateId}/documents`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        } catch { /* don't block the application on an upload hiccup */ }
+      }
+
       if (autoDisqualified) {
         toast.info(reason || 'Your application has been received.');
         router.push(`/jobs/${jobId}/complete?disqualified=true`);
@@ -217,11 +233,39 @@ export default function JobApplyPage() {
                 </div>
 
                 {item.personal ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FieldWrap label="Full Name" req><input value={info.fullName} onChange={(e) => setInfoField('fullName')(e.target.value)} className={cls} placeholder="John Smith" /></FieldWrap>
-                    <FieldWrap label="Email Address" req><input type="email" value={info.email} onChange={(e) => setInfoField('email')(e.target.value)} className={cls} placeholder="john@example.com" /></FieldWrap>
-                    <FieldWrap label="Phone / WhatsApp" req><PhoneInput value={info.phone} onChange={setInfoField('phone')} /></FieldWrap>
-                    <FieldWrap label="City / Country" req><input value={info.location} onChange={(e) => setInfoField('location')(e.target.value)} className={cls} placeholder="New York, USA" /></FieldWrap>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <FieldWrap label="Full Name" req><input value={info.fullName} onChange={(e) => setInfoField('fullName')(e.target.value)} className={cls} placeholder="John Smith" /></FieldWrap>
+                      <FieldWrap label="Email Address" req><input type="email" value={info.email} onChange={(e) => setInfoField('email')(e.target.value)} className={cls} placeholder="john@example.com" /></FieldWrap>
+                      <FieldWrap label="Phone / WhatsApp" req><PhoneInput value={info.phone} onChange={setInfoField('phone')} /></FieldWrap>
+                      <FieldWrap label="City / Country" req><input value={info.location} onChange={(e) => setInfoField('location')(e.target.value)} className={cls} placeholder="New York, USA" /></FieldWrap>
+                    </div>
+
+                    {/* CV / Certificate uploads */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">CV / Resume <span className="text-red-500">*</span></label>
+                        <input ref={cvInputRef} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden"
+                          onChange={(e) => setCvFile(e.target.files?.[0] || null)} />
+                        <button type="button" onClick={() => cvInputRef.current?.click()}
+                          className="w-full border-2 border-dashed border-gray-300 hover:border-brand-400 hover:bg-gray-50 rounded-xl p-4 text-center transition-colors">
+                          <Upload size={20} className="mx-auto text-gray-400 mb-1" />
+                          {cvFile ? <span className="text-sm text-green-600 font-medium truncate block">{cvFile.name}</span>
+                                  : <><span className="text-sm text-gray-600 block">Click to upload your CV</span><span className="text-xs text-gray-400">PDF or DOCX, max 10MB</span></>}
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Certificates (optional)</label>
+                        <input ref={certInputRef} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden"
+                          onChange={(e) => setCertFile(e.target.files?.[0] || null)} />
+                        <button type="button" onClick={() => certInputRef.current?.click()}
+                          className="w-full border-2 border-dashed border-gray-300 hover:border-brand-400 hover:bg-gray-50 rounded-xl p-4 text-center transition-colors">
+                          <Upload size={20} className="mx-auto text-gray-400 mb-1" />
+                          {certFile ? <span className="text-sm text-green-600 font-medium truncate block">{certFile.name}</span>
+                                    : <><span className="text-sm text-gray-600 block">Click to upload certificate</span><span className="text-xs text-gray-400">PDF or DOCX, max 10MB</span></>}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
