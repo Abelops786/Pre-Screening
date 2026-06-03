@@ -18,6 +18,26 @@ const EDITABLE_STATUSES: CandidateStatus[] = [
   'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED',
 ];
 
+// Defined at module scope (not inside the page) so they keep a stable identity
+// across renders — otherwise typing in any input remounts the tree and the
+// field loses focus / the page jumps.
+const Section = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
+  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+    <div className="flex items-center gap-2 mb-4">
+      <span className="text-brand-600">{icon}</span>
+      <h2 className="text-base font-semibold text-gray-800">{title}</h2>
+    </div>
+    {children}
+  </div>
+);
+
+const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
+  <div className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+    <span className="text-sm text-gray-500 shrink-0 mr-4">{label}</span>
+    <span className="text-sm font-medium text-gray-900 text-right">{value}</span>
+  </div>
+);
+
 export default function CandidateProfilePage() {
   const params      = useParams();
   const router      = useRouter();
@@ -121,23 +141,6 @@ export default function CandidateProfilePage() {
   };
   const qaLabel = (key: string): string =>
     key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim();
-
-  const Section = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-brand-600">{icon}</span>
-        <h2 className="text-base font-semibold text-gray-800">{title}</h2>
-      </div>
-      {children}
-    </div>
-  );
-
-  const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
-    <div className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
-      <span className="text-sm text-gray-500 shrink-0 mr-4">{label}</span>
-      <span className="text-sm font-medium text-gray-900 text-right">{value}</span>
-    </div>
-  );
 
   return (
     <div className="max-w-4xl space-y-5">
