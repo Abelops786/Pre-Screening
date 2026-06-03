@@ -51,11 +51,16 @@ app.use('/api/', rateLimit({
   message: { error: 'Too many requests, please try again later.' },
 }));
 
-// Stricter limit for public candidate submission to prevent abuse
+// Limit only the actual application submission (not system-check / language
+// lookups, and not GETs). 100/hour per IP still blocks abuse while allowing
+// shared office/NAT networks and testing to work normally.
 app.use('/api/v1/candidates', rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 10,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { error: 'Too many applications from this IP. Please try again later.' },
+  skip: (req) => req.method !== 'POST' || req.originalUrl.includes('system-check'),
 }));
 
 app.use('/api/v1', routes);

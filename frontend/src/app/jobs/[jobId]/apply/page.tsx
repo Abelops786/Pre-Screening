@@ -154,7 +154,7 @@ export default function JobApplyPage() {
         router.push(`/jobs/${jobId}/system-check?id=${candidateId}`);
       }
     } catch (e: unknown) {
-      const res = (e as { response?: { data?: { message?: string; data?: { id: string; status: string } } } })?.response?.data;
+      const res = (e as { response?: { data?: { message?: string; error?: string; data?: { id: string; status: string } } } })?.response?.data;
       if (res?.message === 'already_applied' && res?.data) {
         const { id, status } = res.data;
         toast.info('Resuming your application…');
@@ -162,7 +162,7 @@ export default function JobApplyPage() {
           ? `/jobs/${jobId}/system-check?id=${id}` : `/jobs/${jobId}/complete`);
         return;
       }
-      toast.error(res?.message || 'Submission failed. Please try again.');
+      toast.error(res?.error || res?.message || 'Submission failed. Please try again.');
     } finally {
       setSaving(false);
     }
