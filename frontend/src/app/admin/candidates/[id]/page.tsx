@@ -338,7 +338,7 @@ export default function CandidateProfilePage() {
             <div className="space-y-2">
               <p className="text-sm text-gray-700">
                 <span className="font-semibold text-green-700">Booked:</span>{' '}
-                {format(new Date(candidate.interviews[0].scheduledTime), 'EEEE, dd MMM yyyy · HH:mm')}
+                {new Date(candidate.interviews[0].scheduledTime).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}
               </p>
               {candidate.interviews[0].msTeamsLink && (
                 <a href={candidate.interviews[0].msTeamsLink} target="_blank" rel="noreferrer"

@@ -142,7 +142,7 @@ const sendLevel1Pass = async (candidate, teamsLink = null) => {
 // Confirmation once a candidate books an interview slot
 const sendInterviewBooked = async (candidate, scheduledTime, teamsLink = null) => {
   const when = new Date(scheduledTime).toLocaleString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
   });
   const joinSection = teamsLink
     ? `<p style="margin:16px 0"><a href="${teamsLink}" style="display:inline-block;background:#105279;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Join Microsoft Teams Interview</a></p>`
@@ -162,7 +162,7 @@ const sendInterviewBooked = async (candidate, scheduledTime, teamsLink = null) =
 // Notify a staff member (recruiter / admin) that a candidate booked an interview
 const sendStaffInterviewNotice = async (to, staffName, candidate, scheduledTime, teamsLink = null) => {
   const when = new Date(scheduledTime).toLocaleString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
   });
   const joinSection = teamsLink
     ? `<p style="margin:16px 0"><a href="${teamsLink}" style="display:inline-block;background:#105279;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Join Microsoft Teams</a></p>`

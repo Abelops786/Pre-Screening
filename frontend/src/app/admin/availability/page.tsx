@@ -47,7 +47,17 @@ export default function AvailabilityPage() {
     <div className="space-y-5 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">My Interview Availability</h1>
-        <p className="text-sm text-gray-500">Set your weekly hours. Qualified candidates can book 30-minute slots within these times.</p>
+        <p className="text-sm text-gray-500">Set the weekly hours you&apos;re free for interviews. The system splits each block into 30-minute slots that candidates can book.</p>
+      </div>
+
+      {/* How it works note */}
+      <div className="bg-brand-50 border border-brand-100 rounded-xl p-4 text-sm text-brand-800">
+        <p className="font-semibold mb-1">How it works</p>
+        <ul className="list-disc list-inside space-y-0.5 text-brand-700">
+          <li>Pick a <strong>day</strong> and a <strong>start</strong> and <strong>end</strong> time, then click <strong>Add</strong>.</li>
+          <li>Example: Monday <strong>9:00 AM → 12:00 PM</strong> creates six 30-min slots (9:00, 9:30, 10:00, 10:30, 11:00, 11:30).</li>
+          <li>Candidates see these <strong>exact times</strong> on their booking page and pick one. Once booked, that slot disappears for everyone else.</li>
+        </ul>
       </div>
 
       {/* Add form */}

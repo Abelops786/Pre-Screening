@@ -53,32 +53,54 @@ const deleteSlotRule = async (req, res, next) => {
 };
 
 // ── Slot generation ──────────────────────────────────────────
-// Build concrete bookable slots for the next HORIZON_DAYS from a recruiter's
-// weekly availability, excluding times that already have an interview booked.
+// Times are treated as wall-clock (the exact HH:mm the recruiter set). We build
+// each slot as that wall-clock time in UTC and also send pre-formatted labels,
+// so every candidate sees the SAME time the recruiter entered — no timezone shift.
+const fmtTime = (hh, mm) => {
+  const ampm = hh >= 12 ? 'PM' : 'AM';
+  const h12 = hh % 12 || 12;
+  return `${h12}:${String(mm).padStart(2, '0')} ${ampm}`;
+};
+const fmtDay = (slot) =>
+  slot.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+// Wall-clock label for a stored instant (e.g. "Monday, June 8 · 9:00 AM")
+const fmtInstant = (iso) => {
+  const dt = new Date(iso);
+  return `${fmtDay(dt)} · ${fmtTime(dt.getUTCHours(), dt.getUTCMinutes())}`;
+};
+
 const generateSlots = (rules, bookedTimes) => {
+  // Exclude any slot whose time is already booked (so it disappears for others)
   const booked = new Set(bookedTimes.map((d) => new Date(d).toISOString()));
   const out = [];
   const now = new Date();
 
   for (let d = 1; d <= HORIZON_DAYS; d++) {
     const day = new Date(now);
-    day.setDate(now.getDate() + d);
-    const dow = day.getDay();
+    day.setUTCDate(now.getUTCDate() + d);
+    const dow = day.getUTCDay();
     const dayRules = rules.filter((r) => r.dayOfWeek === dow);
 
     for (const rule of dayRules) {
       const [sh, sm] = rule.startTime.split(':').map(Number);
       const [eh, em] = rule.endTime.split(':').map(Number);
-      const start = new Date(day); start.setHours(sh, sm, 0, 0);
-      const end   = new Date(day); end.setHours(eh, em, 0, 0);
+      let t = sh * 60 + sm;
+      const end = eh * 60 + em;
 
-      for (let t = new Date(start); t < end; t = new Date(t.getTime() + SLOT_MINUTES * 60000)) {
-        const iso = t.toISOString();
-        if (!booked.has(iso)) out.push(iso);
+      while (t < end) {
+        const hh = Math.floor(t / 60);
+        const mm = t % 60;
+        const slot = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hh, mm, 0));
+        const iso = slot.toISOString();
+        if (!booked.has(iso) && slot > now) {
+          out.push({ iso, day: fmtDay(slot), time: fmtTime(hh, mm) });
+        }
+        t += SLOT_MINUTES;
       }
     }
   }
-  return out.sort();
+  return out.sort((a, b) => a.iso.localeCompare(b.iso));
 };
 
 // Resolve the recruiter who will interview a given candidate
@@ -110,7 +132,7 @@ const getSlotsForCandidate = async (req, res, next) => {
     // Already booked?
     const existing = candidate.interviews[0];
     if (existing?.scheduledTime) {
-      return success(res, { alreadyBooked: true, scheduledTime: existing.scheduledTime, teamsLink: existing.msTeamsLink, slots: [] });
+      return success(res, { alreadyBooked: true, scheduledTime: existing.scheduledTime, scheduledLabel: fmtInstant(existing.scheduledTime), teamsLink: existing.msTeamsLink, slots: [] });
     }
 
     const recruiter = await resolveRecruiter(candidate);
@@ -192,7 +214,7 @@ const bookSlot = async (req, res, next) => {
       logger.warn('Could not notify staff of booking', { error: notifyErr.message });
     }
 
-    return success(res, { scheduledTime: interview.scheduledTime, teamsLink }, 'Interview booked', 201);
+    return success(res, { scheduledTime: interview.scheduledTime, scheduledLabel: fmtInstant(interview.scheduledTime), teamsLink }, 'Interview booked', 201);
   } catch (err) {
     next(err);
   }
