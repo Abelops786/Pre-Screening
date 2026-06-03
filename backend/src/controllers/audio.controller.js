@@ -16,7 +16,7 @@ const processAudio = async (req, res, next) => {
     const { candidateId } = req.params;
     const candidate = await prisma.candidate.findUnique({
       where: { id: candidateId },
-      include: { systemCheck: true },
+      include: { systemCheck: true, job: true },
     });
     if (!candidate) return error(res, 'Candidate not found', 404);
     if (candidate.status !== 'AUDIO_PENDING') {
@@ -40,10 +40,13 @@ const processAudio = async (req, res, next) => {
       return error(res, 'Audio upload failed. Please try again.', 503);
     }
 
+    // The assessed language: job's language for job applicants, else the candidate's selection
+    const assessedLanguage = candidate.job?.language || candidate.selectedLanguage || 'English';
+
     // Whisper transcription
     let whisperResult;
     try {
-      whisperResult = await whisperService.transcribe(req.file.buffer, req.file.mimetype, candidate.selectedLanguage);
+      whisperResult = await whisperService.transcribe(req.file.buffer, req.file.mimetype, assessedLanguage);
     } catch (whisperErr) {
       logger.error('Whisper API call failed', { candidateId, error: whisperErr.message });
       // Save recording without score; flag for human review
@@ -62,7 +65,7 @@ const processAudio = async (req, res, next) => {
     let aiScore = null;
     let aiFeedback = null;
     try {
-      const ai = await aiService.assessFluency(whisperResult.transcript, candidate.selectedLanguage || 'English');
+      const ai = await aiService.assessFluency(whisperResult.transcript, assessedLanguage);
       if (ai) { aiScore = ai.score; aiFeedback = ai.feedback; }
     } catch (aiErr) {
       logger.warn('AI assessment errored', { candidateId, error: aiErr.message });

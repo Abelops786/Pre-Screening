@@ -114,7 +114,7 @@ const getCandidate = async (req, res, next) => {
 const updateStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
-    const validStatuses = ['PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING', 'LEVEL1_PASSED', 'REJECTED'];
+    const validStatuses = ['PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING', 'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED'];
     if (!validStatuses.includes(status)) return error(res, 'Invalid status', 422);
 
     const candidate = await prisma.candidate.update({

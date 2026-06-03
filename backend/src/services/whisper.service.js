@@ -39,28 +39,35 @@ const LANGUAGE_ISO_MAP = {
  *   - absence of [inaudible] / [BLANK_AUDIO] markers
  *   - ratio of unique words (lexical diversity)
  */
-const computeFluencyScore = (transcript, durationHint = 90) => {
+const computeFluencyScore = (transcript, durationSeconds = 30) => {
   if (!transcript || transcript.trim().length === 0) return 0;
 
   const clean = transcript.replace(/\[.*?\]/g, '').trim();
-
-  // Bug 3 fix: Mandarin uses characters not spaces — count characters instead of words
   const isCJK = /[一-鿿]/.test(clean);
   const tokens = isCJK
     ? clean.replace(/\s+/g, '').split('')
     : clean.split(/\s+/).filter(Boolean);
   const unique = new Set(tokens.map((t) => t.toLowerCase()));
 
-  // CJK speakers produce ~300 chars/min vs ~120 words/min for others
-  const expectedCount  = isCJK ? durationHint * (300 / 60) : durationHint * (120 / 60);
-  const countScore     = Math.min(tokens.length / expectedCount, 1) * 50;
+  // Score speaking PACE against the actual duration, not a fixed 90s window.
+  // Natural pace ≈ 2 words/sec (≈4 chars/sec for CJK). Reaching ~70% of that
+  // already earns full pace marks, so a normal reader is not penalised.
+  const dur = Math.max(durationSeconds || 0, 5);
+  const perSec = tokens.length / dur;
+  const targetPerSec = isCJK ? 4 : 2;
+  const paceScore = Math.min(perSec / (targetPerSec * 0.7), 1) * 60;
+
+  // Lexical variety (a reading passage is naturally varied)
   const diversityScore = (unique.size / Math.max(tokens.length, 1)) * 30;
 
-  // Penalise for inaudible markers
+  // Small baseline so any clear, intelligible speech starts from a fair floor
+  const baseline = tokens.length >= 8 ? 10 : 0;
+
+  // Penalise inaudible markers
   const markerCount    = (transcript.match(/\[.*?\]/g) || []).length;
   const clarityPenalty = Math.min(markerCount * 5, 20);
 
-  const raw = countScore + diversityScore - clarityPenalty;
+  const raw = paceScore + diversityScore + baseline - clarityPenalty;
   return Math.min(Math.max(Math.round(raw), 0), 100);
 };
 
@@ -126,7 +133,7 @@ const transcribe = async (audioBuffer, mimeType, selectedLanguage) => {
   // If transcript is still just dots after fallback, treat as unreadable
   const rawText = response.text || '';
   const transcript = isDotOnly(rawText) ? null : rawText;
-  const fluencyScore = transcript ? computeFluencyScore(transcript) : null;
+  const fluencyScore = transcript ? computeFluencyScore(transcript, response.duration) : null;
 
   const flaggedForHumanReview =
     isLowResource ||

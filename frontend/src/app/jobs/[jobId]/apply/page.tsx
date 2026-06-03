@@ -7,43 +7,10 @@ import { toast } from 'react-toastify';
 import { Loader2, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, Check } from 'lucide-react';
 import type { Job, QSection, QField, QuestionnaireSchema } from '@/types';
 import { INTERPRETATION_LANGUAGES } from '@/types';
+import { COUNTRY_CODES } from '@/lib/countryCodes';
 
 const cls = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition';
 const STEP_SIZE = 3;
-
-// Country / area dial codes for the phone field (iso = flagcdn image code)
-const COUNTRY_CODES: { code: string; label: string; iso: string }[] = [
-  { code: '+1',   label: 'US / Canada',    iso: 'us' },
-  { code: '+44',  label: 'United Kingdom', iso: 'gb' },
-  { code: '+61',  label: 'Australia',      iso: 'au' },
-  { code: '+91',  label: 'India',          iso: 'in' },
-  { code: '+92',  label: 'Pakistan',       iso: 'pk' },
-  { code: '+63',  label: 'Philippines',    iso: 'ph' },
-  { code: '+52',  label: 'Mexico',         iso: 'mx' },
-  { code: '+55',  label: 'Brazil',         iso: 'br' },
-  { code: '+34',  label: 'Spain',          iso: 'es' },
-  { code: '+33',  label: 'France',         iso: 'fr' },
-  { code: '+49',  label: 'Germany',        iso: 'de' },
-  { code: '+39',  label: 'Italy',          iso: 'it' },
-  { code: '+351', label: 'Portugal',       iso: 'pt' },
-  { code: '+1',   label: 'Jamaica',        iso: 'jm' },
-  { code: '+254', label: 'Kenya',          iso: 'ke' },
-  { code: '+234', label: 'Nigeria',        iso: 'ng' },
-  { code: '+27',  label: 'South Africa',   iso: 'za' },
-  { code: '+20',  label: 'Egypt',          iso: 'eg' },
-  { code: '+971', label: 'UAE',            iso: 'ae' },
-  { code: '+966', label: 'Saudi Arabia',   iso: 'sa' },
-  { code: '+90',  label: 'Turkey',         iso: 'tr' },
-  { code: '+7',   label: 'Russia',         iso: 'ru' },
-  { code: '+86',  label: 'China',          iso: 'cn' },
-  { code: '+62',  label: 'Indonesia',      iso: 'id' },
-  { code: '+84',  label: 'Vietnam',        iso: 'vn' },
-  { code: '+880', label: 'Bangladesh',     iso: 'bd' },
-  { code: '+93',  label: 'Afghanistan',    iso: 'af' },
-  { code: '+251', label: 'Ethiopia',       iso: 'et' },
-  { code: '+252', label: 'Somalia',        iso: 'so' },
-  { code: '+509', label: 'Haiti',          iso: 'ht' },
-];
 
 type Answers = Record<string, string | string[]>;
 
@@ -341,6 +308,7 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) 
   const [idx,  setIdx]  = useState(initIdx === -1 ? 0 : initIdx);
   const [num,  setNum]  = useState(init.num);
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -352,26 +320,39 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) 
   const emit = (i: number, n: string) => onChange(n.trim() ? `${COUNTRY_CODES[i].code} ${n.trim()}` : '');
   const sel = COUNTRY_CODES[idx];
 
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? COUNTRY_CODES.map((c, i) => ({ c, i })).filter(({ c }) => c.label.toLowerCase().includes(q) || c.code.includes(q))
+    : COUNTRY_CODES.map((c, i) => ({ c, i }));
+
   return (
     <div className="flex gap-2">
       <div ref={ref} className="relative">
-        <button type="button" onClick={() => setOpen((o) => !o)}
+        <button type="button" onClick={() => { setOpen((o) => !o); setQuery(''); }}
           className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-2.5 text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 h-full">
           <Flag iso={sel.iso} />
           <span className="text-gray-700">{sel.code}</span>
           <ChevronDown size={14} className="text-gray-400" />
         </button>
         {open && (
-          <div className="absolute z-30 mt-1 w-60 max-h-64 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-            {COUNTRY_CODES.map((c, i) => (
-              <button type="button" key={`${c.iso}-${i}`}
-                onClick={() => { setIdx(i); setOpen(false); emit(i, num); }}
-                className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-brand-50 ${i === idx ? 'bg-brand-50' : ''}`}>
-                <Flag iso={c.iso} />
-                <span className="flex-1 text-gray-700 truncate">{c.label}</span>
-                <span className="text-gray-400">{c.code}</span>
-              </button>
-            ))}
+          <div className="absolute z-30 mt-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+            <div className="p-2 border-b border-gray-100">
+              <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search country…"
+                className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-400" />
+            </div>
+            <div className="max-h-56 overflow-auto">
+              {filtered.length === 0 && <p className="px-3 py-3 text-xs text-gray-400">No matches</p>}
+              {filtered.map(({ c, i }) => (
+                <button type="button" key={`${c.iso}-${i}`}
+                  onClick={() => { setIdx(i); setOpen(false); emit(i, num); }}
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-brand-50 ${i === idx ? 'bg-brand-50' : ''}`}>
+                  <Flag iso={c.iso} />
+                  <span className="flex-1 text-gray-700 truncate">{c.label}</span>
+                  <span className="text-gray-400">{c.code}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

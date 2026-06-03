@@ -398,16 +398,32 @@ export default function CandidateProfilePage() {
       {/* Manual Status Change (Admin+) */}
       {currentUser && ['SUPER_ADMIN', 'ADMIN'].includes(currentUser.role) && (
         <Section title="Manual Status Override" icon={<Flag size={18} />}>
-          <div className="flex items-center gap-3 flex-wrap">
-            <select
-              defaultValue={candidate.status}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              disabled={statusChanging}
-              className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              {EDITABLE_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-            </select>
-            {statusChanging && <Loader2 size={16} className="animate-spin text-brand-600" />}
+          <div className="space-y-3">
+            {candidate.status !== 'LEVEL1_PASSED' && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  onClick={() => handleStatusChange('LEVEL1_PASSED')}
+                  disabled={statusChanging}
+                  className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+                >
+                  {statusChanging ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} />}
+                  Manually Pass (Level 1)
+                </button>
+                <span className="text-xs text-gray-400">Overrides the score and unlocks the interview booking &amp; Teams link below.</span>
+              </div>
+            )}
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs text-gray-500">Or set status:</span>
+              <select
+                value={candidate.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                disabled={statusChanging}
+                className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                {EDITABLE_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+              </select>
+              {statusChanging && <Loader2 size={16} className="animate-spin text-brand-600" />}
+            </div>
           </div>
         </Section>
       )}
