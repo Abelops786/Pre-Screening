@@ -79,14 +79,16 @@ const base = (content) => `
 `;
 
 const sendConfirmation = async (candidate) => {
+  // Only show fields that exist (job-based candidates don't have shift/language the same way)
+  const summary = [
+    candidate.selectedLanguage ? `<li><strong>Language:</strong> ${candidate.selectedLanguage}</li>` : '',
+    candidate.availabilityShift ? `<li><strong>Availability shift:</strong> ${candidate.availabilityShift}</li>` : '',
+  ].filter(Boolean).join('');
+
   const html = base(`
     <p>Dear <strong>${candidate.fullName}</strong>,</p>
     <p>Thank you for applying! We have received your application and it is currently being reviewed.</p>
-    <p>Here's a summary of your submission:</p>
-    <ul>
-      <li><strong>Language selected:</strong> ${candidate.selectedLanguage}</li>
-      <li><strong>Availability shift:</strong> ${candidate.availabilityShift}</li>
-    </ul>
+    ${summary ? `<p>Here's a summary of your submission:</p><ul>${summary}</ul>` : ''}
     <p>You will receive a follow-up email with the next steps shortly.</p>
     <p>Best regards,<br>The Recruitment Team</p>
   `);

@@ -5,7 +5,6 @@ const filterService  = require('../services/filter.service');
 const scoringService = require('../services/scoring.service');
 const aiService      = require('../services/aiAssessment.service');
 const emailService   = require('../services/email.service');
-const msService      = require('../services/microsoft.service');
 const { success, error } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 
@@ -124,34 +123,10 @@ const processAudio = async (req, res, next) => {
     // Send notification email (non-blocking)
     const updatedCandidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (filterResult.qualified) {
-      // Try to auto-create a Teams meeting using the admin's stored refresh token
-      // (refresh tokens don't expire like access tokens, so this keeps working)
-      let teamsLink = null;
-      try {
-        const admin = await prisma.user.findFirst({
-          where: { role: 'SUPER_ADMIN', msRefreshToken: { not: null } },
-        });
-        if (admin?.msRefreshToken) {
-          const meeting = await msService.createOnlineMeetingWithRefresh(
-            admin.msRefreshToken,
-            `TalentScreen Interview – ${updatedCandidate.fullName}`,
-          );
-          teamsLink = meeting.joinWebUrl || meeting.joinUrl || null;
-          // Persist the interview record with Teams link
-          await prisma.interview.create({
-            data: {
-              candidateId,
-              recruiterId: admin.id,
-              scheduledTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // placeholder: 1 week from now
-              msTeamsLink: teamsLink,
-            },
-          });
-          logger.info('Teams meeting created for Level 1 pass', { candidateId, teamsLink });
-        }
-      } catch (msErr) {
-        logger.warn('Could not create Teams meeting, sending email without link', { error: msErr.message });
-      }
-      emailService.sendLevel1Pass(updatedCandidate, teamsLink).catch(() => {});
+      // Do NOT auto-create a meeting here — the candidate chooses their own
+      // interview slot via the booking link, which then creates the Teams meeting.
+      // Passing no teamsLink makes the email include the "Book Your Interview" link.
+      emailService.sendLevel1Pass(updatedCandidate, null).catch(() => {});
     } else {
       // Neutral "under review" email — never tell the candidate they failed.
       // The recruiter still sees the real REJECTED status in the dashboard.
