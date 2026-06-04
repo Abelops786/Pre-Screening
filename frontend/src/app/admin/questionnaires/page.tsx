@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
 import {
-  Loader2, Plus, Trash2, ChevronUp, ChevronDown, Save, RotateCcw, Lock, GripVertical,
+  Loader2, Plus, Trash2, ChevronUp, ChevronDown, Save, RotateCcw, Lock, GripVertical, Star,
 } from 'lucide-react';
 import type { Department, QuestionnaireTemplate, QSection, QField, QFieldType } from '@/types';
 
@@ -86,6 +86,26 @@ export default function QuestionnairesPage() {
     return s;
   });
 
+  // Up to 3 questions can be marked "important" (carry score weight + correct answer)
+  const importantCount = sections.reduce((n, s) => n + s.fields.filter((f) => f.important).length, 0);
+  const toggleImportant = (si: number, fi: number) => {
+    const f = sections[si].fields[fi];
+    if (!f.important && importantCount >= 3) {
+      toast.error('You can mark at most 3 questions as important.');
+      return;
+    }
+    if (f.important) {
+      updateField(si, fi, { important: false });
+    } else {
+      const firstOption = f.options?.[0];
+      updateField(si, fi, {
+        important: true,
+        importantWeight: f.importantWeight ?? 10,
+        correctAnswer: f.correctAnswer ?? (f.type === 'confirm' ? 'Yes' : firstOption ?? ''),
+      });
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -146,6 +166,11 @@ export default function QuestionnairesPage() {
         Personal info (name, email, phone, location) is always collected automatically as the first step.
         Questions with a <Lock size={11} className="inline" /> are used by automatic screening rules — you can edit the wording but not remove them.
       </p>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-amber-800 flex items-center gap-2">
+        <Star size={14} className="fill-amber-400 text-amber-400 shrink-0" />
+        Mark up to <strong>3 important questions</strong> — each gets a score weight and a correct answer that counts toward passing.
+        <span className="ml-auto font-semibold whitespace-nowrap">{importantCount} / 3 used</span>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16"><Loader2 size={28} className="animate-spin text-brand-600" /></div>
@@ -170,7 +195,8 @@ export default function QuestionnairesPage() {
                     isFirst={fi === 0} isLast={fi === sec.fields.length - 1}
                     onChange={(patch) => updateField(si, fi, patch)}
                     onMove={(dir) => moveField(si, fi, dir)}
-                    onRemove={() => removeField(si, fi)} />
+                    onRemove={() => removeField(si, fi)}
+                    onToggleImportant={() => toggleImportant(si, fi)} />
                 ))}
                 <button onClick={() => addField(si)}
                   className="w-full flex items-center justify-center gap-1.5 py-3 text-sm text-brand-600 hover:bg-brand-50 transition-colors">
@@ -190,14 +216,18 @@ export default function QuestionnairesPage() {
   );
 }
 
-function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove }: {
+function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onToggleImportant }: {
   field: QField; si: number; fi: number; isFirst: boolean; isLast: boolean;
   onChange: (patch: Partial<QField>) => void;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
+  onToggleImportant: () => void;
 }) {
   const hasOptions = TYPES_WITH_OPTIONS.includes(field.type) && field.optionsSource !== 'languages';
   const locked = field.protected;
+  // Possible answers for the "correct answer" picker
+  const answerChoices = field.type === 'confirm' ? ['Yes']
+    : (field.optionsSource === 'languages' ? [] : (field.options || []));
 
   const setOption = (oi: number, value: string) => {
     const opts = [...(field.options || [])];
@@ -278,10 +308,44 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove }: {
                 placeholder="Placeholder (optional)" className="rounded border border-gray-200 px-2 py-1 text-xs flex-1 max-w-[260px] focus:outline-none" />
             )}
           </div>
+
+          {/* Important question config */}
+          {field.important && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-800">
+                <Star size={13} className="fill-amber-400 text-amber-400" /> Important question
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600">
+                <label className="flex items-center gap-1.5">
+                  Score weight:
+                  <input type="number" min="1" value={field.importantWeight ?? ''} onChange={(e) => onChange({ importantWeight: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    className="w-16 rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                </label>
+                <label className="flex items-center gap-1.5">
+                  Correct answer:
+                  {answerChoices.length > 0 ? (
+                    <select value={field.correctAnswer ?? ''} onChange={(e) => onChange({ correctAnswer: e.target.value })}
+                      className="rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400 max-w-[220px]">
+                      <option value="">— Select —</option>
+                      {answerChoices.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : (
+                    <input value={field.correctAnswer ?? ''} onChange={(e) => onChange({ correctAnswer: e.target.value })}
+                      placeholder="expected answer" className="rounded border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400 max-w-[220px]" />
+                  )}
+                </label>
+              </div>
+              <p className="text-[11px] text-amber-700">Candidates earn these points only when their answer matches the correct answer.</p>
+            </div>
+          )}
         </div>
 
         {/* Field controls */}
         <div className="flex flex-col gap-0.5 shrink-0">
+          <button onClick={onToggleImportant} title={field.important ? 'Unmark important' : 'Mark as important'}
+            className={`p-1 ${field.important ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}>
+            <Star size={15} className={field.important ? 'fill-amber-400' : ''} />
+          </button>
           <button onClick={() => onMove(-1)} disabled={isFirst} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronUp size={14} /></button>
           <button onClick={() => onMove(1)} disabled={isLast} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronDown size={14} /></button>
           {!locked && <button onClick={onRemove} className="p-1 text-red-400 hover:text-red-600"><Trash2 size={14} /></button>}

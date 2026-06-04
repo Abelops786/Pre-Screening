@@ -11,6 +11,18 @@ const scoreQuestionnaire = (answers, schema) => {
     const ans = answers?.[f.key];
     const opt = f.optionScores || null;
 
+    // Important questions (admin-flagged): full weight only if the answer matches
+    // the correct answer. Takes precedence over per-option scores for this field.
+    if (f.important && Number(f.importantWeight) > 0 && f.correctAnswer !== undefined && f.correctAnswer !== '') {
+      const w = Number(f.importantWeight);
+      max += w;
+      const correct = f.type === 'checkbox'
+        ? Array.isArray(ans) && ans.includes(f.correctAnswer)
+        : String(ans ?? '') === String(f.correctAnswer);
+      if (correct) earned += w;
+      continue;
+    }
+
     if ((f.type === 'radio' || f.type === 'select') && opt) {
       const values = Object.values(opt).map(Number).filter(Number.isFinite);
       const qMax = values.length ? Math.max(...values, 0) : 0;

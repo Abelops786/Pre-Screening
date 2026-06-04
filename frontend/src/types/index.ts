@@ -39,6 +39,9 @@ export interface QField {
   guidance?: string;
   score?: number;                          // for confirm: points awarded when confirmed
   optionScores?: Record<string, number>;   // for radio/select/checkbox: points per option
+  important?: boolean;                      // flagged as an important/scored question (max 3)
+  importantWeight?: number;                 // points this important question is worth
+  correctAnswer?: string;                   // the answer required to earn the points
   showIf?: { key?: string; equals?: string; includes?: string; jobPositionType?: string; jobRoleType?: string };
   hideIfJobHas?: string;
 }
