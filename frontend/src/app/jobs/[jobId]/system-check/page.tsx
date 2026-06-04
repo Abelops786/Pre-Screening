@@ -9,43 +9,69 @@ import { collectStaticDiagnostics, measureLatency, measureMic, type Diagnostics 
 
 type SpeedResult = { download: number; upload: number };
 
+// Parallel streaming download (fast.com technique) — accurate on fast links,
+// but can be blocked by ad-blockers / corporate proxies on the large request.
+async function measureDownloadParallel(): Promise<number> {
+  // Warm up the connection so TLS/handshake time isn't counted
+  await fetch('https://speed.cloudflare.com/__down?bytes=200000', { cache: 'no-store' })
+    .then((r) => r.arrayBuffer()).catch(() => null);
+
+  const STREAMS  = 6;
+  const DURATION = 6000; // ms
+  let totalBytes = 0;
+  const start    = performance.now();
+  const deadline = start + DURATION;
+
+  const worker = async () => {
+    while (performance.now() < deadline) {
+      try {
+        const res = await fetch('https://speed.cloudflare.com/__down?bytes=25000000', { cache: 'no-store' });
+        const reader = res.body?.getReader();
+        if (!reader) { totalBytes += (await res.arrayBuffer()).byteLength; continue; }
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalBytes += value?.length || 0;
+          if (performance.now() >= deadline) { try { await reader.cancel(); } catch { /* ignore */ } break; }
+        }
+      } catch { break; }
+    }
+  };
+  await Promise.all(Array.from({ length: STREAMS }, worker));
+  const seconds = (performance.now() - start) / 1000;
+  return seconds > 0 && totalBytes > 0 ? (totalBytes * 8) / 1e6 / seconds : 0;
+}
+
+// Fallback: plain sequential downloads via arrayBuffer (no streaming reader).
+// More compatible — used when the parallel/streaming method returns 0.
+async function measureDownloadSimple(): Promise<number> {
+  let best = 0;
+  for (let i = 0; i < 2; i++) {
+    try {
+      const start = performance.now();
+      const res = await fetch('https://speed.cloudflare.com/__down?bytes=10000000', { cache: 'no-store' });
+      const buf = await res.arrayBuffer();
+      const seconds = (performance.now() - start) / 1000;
+      if (seconds > 0 && buf.byteLength > 0) best = Math.max(best, (buf.byteLength * 8) / 1e6 / seconds);
+    } catch { /* try next */ }
+  }
+  return best;
+}
+
 async function measureSpeed(): Promise<SpeedResult> {
   let download = 0;
   let upload = 0;
 
-  // ── Download: parallel streams over a fixed window (the technique fast.com /
-  // speedtest use) so high-speed links are properly saturated and measured. ──
+  // ── Download: try the accurate parallel method, fall back to the simple one
+  // so a blocked/failed streaming request never reports a false 0 Mbps. ──
   try {
-    // Warm up the connection so TLS/handshake time isn't counted
-    await fetch('https://speed.cloudflare.com/__down?bytes=200000', { cache: 'no-store' })
-      .then((r) => r.arrayBuffer()).catch(() => null);
-
-    const STREAMS  = 6;
-    const DURATION = 6000; // ms
-    let totalBytes = 0;
-    const start    = performance.now();
-    const deadline = start + DURATION;
-
-    const worker = async () => {
-      while (performance.now() < deadline) {
-        try {
-          const res = await fetch('https://speed.cloudflare.com/__down?bytes=30000000', { cache: 'no-store' });
-          const reader = res.body?.getReader();
-          if (!reader) { totalBytes += (await res.arrayBuffer()).byteLength; continue; }
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            totalBytes += value?.length || 0;
-            if (performance.now() >= deadline) { try { await reader.cancel(); } catch { /* ignore */ } break; }
-          }
-        } catch { break; }
-      }
-    };
-    await Promise.all(Array.from({ length: STREAMS }, worker));
-    const seconds = (performance.now() - start) / 1000;
-    if (seconds > 0 && totalBytes > 0) download = parseFloat(((totalBytes * 8) / 1e6 / seconds).toFixed(1)); // Mbps
-  } catch { download = 0; }
+    download = await measureDownloadParallel();
+    if (!download) download = await measureDownloadSimple();
+  } catch {
+    try { download = await measureDownloadSimple(); } catch { download = 0; }
+  }
+  download = parseFloat((download || 0).toFixed(1));
 
   // ── Upload: parallel POSTs over a fixed window ──
   try {
