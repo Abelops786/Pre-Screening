@@ -95,7 +95,10 @@ export default function JobApplyPage() {
       if (item.personal) {
         if (!info.fullName.trim()) return 'Full name is required';
         if (!info.email.trim()) return 'Email is required';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.email.trim())) return 'Please enter a valid email address';
         if (!info.phone.trim()) return 'Phone is required';
+        // The number part (after the dial code) must have at least 6 digits
+        if ((info.phone.replace(/^\+\d{1,4}/, '').match(/\d/g) || []).length < 6) return 'Please enter a valid phone number (digits only)';
         if (!info.location.trim()) return 'Location is required';
         if (!cvFile) return 'Please upload your CV / Resume';
       } else {
@@ -402,8 +405,14 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) 
       </div>
       <input
         type="tel"
+        inputMode="numeric"
         value={num}
-        onChange={(e) => { setNum(e.target.value); emit(idx, e.target.value); }}
+        onChange={(e) => {
+          // Only digits and basic phone separators — block letters/symbols
+          const clean = e.target.value.replace(/[^\d\s()+\-]/g, '');
+          setNum(clean);
+          emit(idx, clean);
+        }}
         className={`${cls} flex-1`}
         placeholder="555 000 0000"
       />

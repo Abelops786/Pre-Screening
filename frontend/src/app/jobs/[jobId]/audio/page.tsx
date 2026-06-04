@@ -8,7 +8,7 @@ import { Mic, Square, Upload, Loader2, RefreshCw, Clock, CheckCircle } from 'luc
 import { getReadingTask, type ReadingTask } from '@/lib/readingPassages';
 
 const MAX_SECONDS = 90;
-const MIN_SECONDS = 25; // target ~30 seconds
+const MIN_SECONDS = 15; // minimum required recording length
 
 function AudioContent() {
   const { jobId }    = useParams<{ jobId: string }>();
@@ -169,7 +169,7 @@ function AudioContent() {
 
           {phase === 'ready' && (
             <div className="text-center space-y-4">
-              <p className="text-sm text-gray-500">Record for <strong>about 30 seconds</strong>. Press the button to begin.</p>
+              <p className="text-sm text-gray-500">Record for <strong>at least 15 seconds</strong>. Press the button to begin.</p>
               <button onClick={startRecording} className="mx-auto flex flex-col items-center gap-2 group">
                 <div className="w-20 h-20 rounded-full bg-brand-600 hover:bg-brand-700 flex items-center justify-center shadow-lg transition-all">
                   <Mic size={32} className="text-white" />
@@ -207,13 +207,18 @@ function AudioContent() {
                 <audio src={audioUrl} controls className="w-full" />
                 <p className="text-xs text-gray-400 mt-1">Duration: {formatTime(elapsed)}</p>
               </div>
+              {elapsed < MIN_SECONDS && (
+                <p className="text-xs text-amber-600 text-center">
+                  Your recording is too short. Please record at least {MIN_SECONDS} seconds, then submit.
+                </p>
+              )}
               <div className="flex gap-3">
                 <button onClick={reset}
                   className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium rounded-xl py-2.5 flex items-center justify-center gap-2 text-sm transition-colors">
                   <RefreshCw size={16} /> Re-record
                 </button>
-                <button onClick={submit}
-                  className="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl py-2.5 flex items-center justify-center gap-2 text-sm transition-colors">
+                <button onClick={submit} disabled={elapsed < MIN_SECONDS}
+                  className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-2.5 flex items-center justify-center gap-2 text-sm transition-colors">
                   <Upload size={16} /> Submit Recording
                 </button>
               </div>
