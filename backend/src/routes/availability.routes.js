@@ -9,8 +9,9 @@ router.post('/book/:candidateId',  ctrl.bookSlot);
 
 // Recruiter/admin — manage own weekly hours
 router.use(authenticate);
-router.get('/',        isRecruiter, ctrl.listMine);
-router.post('/',       isRecruiter, ctrl.createSlotRule);
-router.delete('/:id',  isRecruiter, ctrl.deleteSlotRule);
+router.get('/',             isRecruiter, ctrl.listMine);
+router.get('/my-interviews', isRecruiter, ctrl.myInterviews);
+router.post('/',            isRecruiter, ctrl.createSlotRule);
+router.delete('/:id',       isRecruiter, ctrl.deleteSlotRule);
 
 module.exports = router;

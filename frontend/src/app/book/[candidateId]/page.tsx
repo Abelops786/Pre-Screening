@@ -6,7 +6,7 @@ import api from '@/lib/api';
 import { toast } from 'react-toastify';
 import { Loader2, CalendarCheck, Video, AlertCircle, CheckCircle } from 'lucide-react';
 
-interface Slot { iso: string; day: string; time: string }
+interface Slot { iso: string; day: string; time: string; booked?: boolean }
 interface SlotsResponse {
   alreadyBooked: boolean;
   scheduledLabel?: string;
@@ -37,6 +37,7 @@ export default function BookingPage() {
   useEffect(() => { load(); }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const book = async (slot: Slot) => {
+    if (slot.booked) return;
     setBooking(slot.iso);
     try {
       const { data } = await api.post(`/availability/book/${candidateId}`, { scheduledTime: slot.iso });
@@ -118,7 +119,13 @@ export default function BookingPage() {
               <div key={d}>
                 <p className="text-sm font-semibold text-gray-700 mb-2">{d}</p>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {groups[d].map((s) => (
+                  {groups[d].map((s) => s.booked ? (
+                    <div key={s.iso} title="Already booked"
+                      className="text-sm border border-gray-100 bg-gray-100 text-gray-400 rounded-lg py-2 flex flex-col items-center justify-center cursor-not-allowed line-through">
+                      {s.time}
+                      <span className="text-[10px] no-underline">Booked</span>
+                    </div>
+                  ) : (
                     <button key={s.iso} onClick={() => book(s)} disabled={!!booking}
                       className="text-sm border border-gray-200 hover:border-brand-400 hover:bg-brand-50 disabled:opacity-50 rounded-lg py-2 transition-colors flex items-center justify-center">
                       {booking === s.iso ? <Loader2 size={14} className="animate-spin" /> : s.time}

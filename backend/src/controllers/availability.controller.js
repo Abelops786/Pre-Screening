@@ -71,7 +71,8 @@ const fmtInstant = (iso) => {
 };
 
 const generateSlots = (rules, bookedTimes) => {
-  // Exclude any slot whose time is already booked (so it disappears for others)
+  // Booked slots are kept in the list but marked booked:true, so candidates can
+  // see the recruiter is busy at those times (they just can't select them).
   const booked = new Set(bookedTimes.map((d) => new Date(d).toISOString()));
   const out = [];
   const now = new Date();
@@ -93,8 +94,8 @@ const generateSlots = (rules, bookedTimes) => {
         const mm = t % 60;
         const slot = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hh, mm, 0));
         const iso = slot.toISOString();
-        if (!booked.has(iso) && slot > now) {
-          out.push({ iso, day: fmtDay(slot), time: fmtTime(hh, mm) });
+        if (slot > now) {
+          out.push({ iso, day: fmtDay(slot), time: fmtTime(hh, mm), booked: booked.has(iso) });
         }
         t += SLOT_MINUTES;
       }
@@ -220,4 +221,40 @@ const bookSlot = async (req, res, next) => {
   }
 };
 
-module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot };
+// List the logged-in recruiter's booked interviews (admins see all)
+const myInterviews = async (req, res, next) => {
+  try {
+    const where = req.user.role === 'RECRUITER' ? { recruiterId: req.user.id } : {};
+    const interviews = await prisma.interview.findMany({
+      where,
+      orderBy: { scheduledTime: 'asc' },
+      include: {
+        candidate: { select: { id: true, fullName: true, email: true, phone: true, status: true, job: { select: { title: true, departmentLabel: true, department: true } } } },
+        recruiter: { select: { id: true, name: true } },
+      },
+    });
+    const now = new Date();
+    const mapped = interviews.map((i) => ({
+      id: i.id,
+      candidateId: i.candidate?.id,
+      candidateName: i.candidate?.fullName,
+      candidateEmail: i.candidate?.email,
+      candidatePhone: i.candidate?.phone,
+      jobTitle: i.candidate?.job?.departmentLabel || i.candidate?.job?.title || '—',
+      recruiterName: i.recruiter?.name,
+      scheduledTime: i.scheduledTime,
+      scheduledLabel: fmtInstant(i.scheduledTime),
+      msTeamsLink: i.msTeamsLink,
+      upcoming: new Date(i.scheduledTime) >= now,
+    }));
+    return success(res, {
+      total: mapped.length,
+      upcoming: mapped.filter((m) => m.upcoming).length,
+      interviews: mapped,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews };
