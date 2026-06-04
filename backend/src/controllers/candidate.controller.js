@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const prisma = require('../config/database');
 const { success, error } = require('../utils/responseHelper');
 const emailService = require('../services/email.service');
+const vpnService = require('../services/vpnCheck.service');
 
 // African countries — used by the Sales campaign location filter
 const AFRICAN_COUNTRIES = [
@@ -209,11 +210,36 @@ const submitJobApplication = async (req, res, next) => {
   }
 };
 
+// Real client IP behind Railway's proxy (trust proxy is set in app.js)
+const getClientIp = (req) => {
+  const xff = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return xff || req.ip || req.socket?.remoteAddress || '';
+};
+
+// ── VPN / proxy pre-check (public, called before Level 1 starts) ──
+const vpnCheck = async (req, res, next) => {
+  try {
+    const ip = getClientIp(req);
+    const tz = req.query.tz ? String(req.query.tz) : undefined;
+    const result = await vpnService.checkVpn(ip, tz);
+    return success(res, { ...result, ip }, 'VPN check complete');
+  } catch (err) {
+    // Never block the candidate on an internal error
+    return success(res, { vpn: false, reason: null, country: null }, 'VPN check skipped');
+  }
+};
+
 // ── System check ───────────────────────────────────────────────
 const saveSystemCheck = async (req, res, next) => {
   try {
     const { id: candidateId } = req.params;
-    const { downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted } = req.body;
+    const {
+      downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted,
+      // extended diagnostics (admin/recruiter-only)
+      screenResolution, cpuCores, deviceMemory, connectionType,
+      networkLatency, networkJitter, micInputLevel, backgroundNoise,
+      browserVersion, timezone,
+    } = req.body;
 
     const candidate = await prisma.candidate.findUnique({
       where: { id: candidateId },
@@ -236,10 +262,34 @@ const saveSystemCheck = async (req, res, next) => {
       parseFloat(uploadSpeed)   >= minUpload   &&
       micPermitted === true;
 
+    // Server-side VPN/proxy check so the result is always recorded for admins,
+    // even if the candidate bypassed the front-end popup. Fails open.
+    const ip = getClientIp(req);
+    const vpn = await vpnService.checkVpn(ip, timezone);
+
+    const num = (v) => (v === undefined || v === null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+
+    const diagnostics = {
+      screenResolution: screenResolution ?? null,
+      cpuCores:        num(cpuCores) != null ? Math.round(num(cpuCores)) : null,
+      deviceMemory:    num(deviceMemory),
+      connectionType:  connectionType ?? null,
+      networkLatency:  num(networkLatency) != null ? Math.round(num(networkLatency)) : null,
+      networkJitter:   num(networkJitter) != null ? Math.round(num(networkJitter)) : null,
+      micInputLevel:   num(micInputLevel) != null ? Math.round(num(micInputLevel)) : null,
+      backgroundNoise: num(backgroundNoise) != null ? Math.round(num(backgroundNoise)) : null,
+      browserVersion:  browserVersion ?? null,
+      timezone:        timezone ?? null,
+      ipAddress:       ip || null,
+      ipCountry:       vpn.country ?? null,
+      vpnDetected:     vpn.vpn,
+      vpnReason:       vpn.reason ?? null,
+    };
+
     const check = await prisma.systemCheck.upsert({
       where:  { candidateId },
-      create: { candidateId, downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted, passed },
-      update: { downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted, passed },
+      create: { candidateId, downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted, passed, ...diagnostics },
+      update: { downloadSpeed, uploadSpeed, deviceType, os, browser, micPermitted, speakerPermitted, passed, ...diagnostics },
     });
 
     const nextStatus = passed ? 'AUDIO_PENDING' : 'SYSTEM_CHECK_FAILED';
@@ -279,4 +329,4 @@ const getCandidateLanguage = async (req, res, next) => {
   }
 };
 
-module.exports = { submit, submitJobApplication, saveSystemCheck, getCandidateLanguage };
+module.exports = { submit, submitJobApplication, saveSystemCheck, getCandidateLanguage, vpnCheck };

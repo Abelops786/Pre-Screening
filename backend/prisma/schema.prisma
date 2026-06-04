@@ -188,6 +188,22 @@ model SystemCheck {
   passed           Boolean
   checkedAt        DateTime @default(now()) @map("checked_at")
 
+  // ── Extended diagnostics (collected silently, admin/recruiter-only) ──
+  screenResolution String?  @map("screen_resolution")
+  cpuCores         Int?     @map("cpu_cores")
+  deviceMemory     Float?   @map("device_memory")    // GB (browser-reported)
+  connectionType   String?  @map("connection_type")  // 4g, wifi, etc.
+  networkLatency   Int?     @map("network_latency")   // ms ping
+  networkJitter    Int?     @map("network_jitter")    // ms
+  micInputLevel    Int?     @map("mic_input_level")   // 0–100 peak sampled
+  backgroundNoise  Int?     @map("background_noise")  // 0–100 ambient noise
+  browserVersion   String?  @map("browser_version")
+  timezone         String?  @map("timezone")          // browser IANA tz
+  ipAddress        String?  @map("ip_address")
+  ipCountry        String?  @map("ip_country")
+  vpnDetected      Boolean? @map("vpn_detected")
+  vpnReason        String?  @map("vpn_reason")
+
   candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   @@map("system_checks")

@@ -4,7 +4,8 @@ import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
-import { Wifi, CheckCircle, XCircle, Loader2, Monitor, Mic } from 'lucide-react';
+import { Wifi, CheckCircle, XCircle, Loader2, Monitor, Mic, ShieldAlert } from 'lucide-react';
+import { collectStaticDiagnostics, measureLatency, measureMic, type Diagnostics } from '@/lib/systemDiagnostics';
 
 type SpeedResult = { download: number; upload: number };
 
@@ -84,7 +85,26 @@ function SystemCheckContent() {
   const [submitting, setSubmitting] = useState(false);
   const [minDown,    setMinDown]    = useState(20);
   const [minUp,      setMinUp]      = useState(10);
+  // VPN/proxy gate — candidate sees this popup and must turn off their VPN
+  const [vpn,        setVpn]        = useState<{ vpn: boolean; reason: string | null } | null>(null);
+  const [vpnChecking, setVpnChecking] = useState(true);
   const hasRun = useRef(false);
+  // Silently-collected diagnostics (admin-only) — never shown to the candidate
+  const diagRef = useRef<Diagnostics | null>(null);
+
+  // Run the VPN pre-check before Level 1 can start.
+  const runVpnCheck = async () => {
+    setVpnChecking(true);
+    try {
+      const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+      const { data } = await api.get(`/candidates/vpn-check?tz=${tz}`);
+      setVpn({ vpn: !!data.data?.vpn, reason: data.data?.reason ?? null });
+    } catch {
+      setVpn({ vpn: false, reason: null }); // fail open
+    } finally {
+      setVpnChecking(false);
+    }
+  };
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -99,18 +119,31 @@ function SystemCheckContent() {
       setMinDown(data.data.minDownloadSpeed ?? 20);
       setMinUp(data.data.minUploadSpeed ?? 10);
     }).catch(() => {});
+
+    runVpnCheck();
   }, [jobId]);
 
   const runChecks = async () => {
     if (hasRun.current) return;
     hasRun.current = true;
     setStep('testing');
+
+    // Collect silent diagnostics alongside the visible checks (admin-only).
+    const diag = collectStaticDiagnostics();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((t) => t.stop());
       setMicGranted(true);
+      const mic = await measureMic(stream);  // sample before stopping
+      diag.micInputLevel = mic.micInputLevel;
+      diag.backgroundNoise = mic.backgroundNoise;
+      stream.getTracks().forEach((t) => t.stop());
     } catch { setMicGranted(false); }
-    const result = await measureSpeed();
+
+    const [result, lat] = await Promise.all([measureSpeed(), measureLatency()]);
+    diag.networkLatency = lat.latency;
+    diag.networkJitter = lat.jitter;
+    diagRef.current = diag;
+
     setSpeed(result);
     setStep('done');
   };
@@ -119,10 +152,12 @@ function SystemCheckContent() {
     if (!speed || micGranted === null || !candidateId) { toast.error('Run the system check first'); return; }
     setSubmitting(true);
     try {
+      const d = diagRef.current;
       await api.post(`/candidates/${candidateId}/system-check`, {
         downloadSpeed: speed.download, uploadSpeed: speed.upload,
         deviceType: device.deviceType, os: device.os, browser: device.browser,
         micPermitted: micGranted, speakerPermitted: true,
+        ...(d ?? {}),
       });
       toast.success('System check complete!');
       // Always go to audio recording next (voice screening)
@@ -152,6 +187,27 @@ function SystemCheckContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center p-4">
+      {/* VPN / proxy block — candidate must disable their VPN to start Level 1 */}
+      {vpn?.vpn === true && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
+            <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+              <ShieldAlert size={28} className="text-red-500" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Please turn off your VPN</h2>
+            <p className="text-sm text-gray-600 leading-relaxed mb-2">
+              We detected that you may be using a VPN or proxy. For a fair and secure assessment,
+              please disable it before starting Level&nbsp;1.
+            </p>
+            {vpn.reason && <p className="text-xs text-gray-400 mb-4">{vpn.reason}</p>}
+            <button onClick={runVpnCheck} disabled={vpnChecking}
+              className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors">
+              {vpnChecking ? <Loader2 size={16} className="animate-spin" /> : null}
+              {vpnChecking ? 'Re-checking…' : "I've turned it off — Re-check"}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <div className="flex justify-center mb-4">
@@ -175,9 +231,10 @@ function SystemCheckContent() {
           </div>
 
           {step === 'idle' && (
-            <button onClick={runChecks}
-              className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors">
-              <Wifi size={18} /> Start System Check
+            <button onClick={runChecks} disabled={vpnChecking || vpn?.vpn === true}
+              className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors">
+              {vpnChecking ? <Loader2 size={18} className="animate-spin" /> : <Wifi size={18} />}
+              {vpnChecking ? 'Verifying connection…' : 'Start System Check'}
             </button>
           )}
 

@@ -3,7 +3,8 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
-import { Wifi, Mic, Monitor, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Wifi, Mic, Monitor, CheckCircle, XCircle, Loader2, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { collectStaticDiagnostics, measureLatency, measureMic, type Diagnostics } from '@/lib/systemDiagnostics';
 
 interface CheckResult {
   downloadSpeed: number | null;
@@ -66,16 +67,6 @@ async function measureSpeed(): Promise<{ download: number; upload: number }> {
   }
 }
 
-async function checkMicPermission(): Promise<boolean> {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((t) => t.stop());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function SystemCheckContent() {
   const router       = useRouter();
   const params       = useSearchParams();
@@ -85,7 +76,23 @@ function SystemCheckContent() {
   const [result,  setResult]  = useState<CheckResult | null>(null);
   const [running, setRunning] = useState(false);
   const [saving,  setSaving]  = useState(false);
+  const [vpn,        setVpn]        = useState<{ vpn: boolean; reason: string | null } | null>(null);
+  const [vpnChecking, setVpnChecking] = useState(false);
   const hasRun = useRef(false);
+  const diagRef = useRef<Diagnostics | null>(null);
+
+  const runVpnCheck = async () => {
+    setVpnChecking(true);
+    try {
+      const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+      const { data } = await api.get(`/candidates/vpn-check?tz=${tz}`);
+      setVpn({ vpn: !!data.data?.vpn, reason: data.data?.reason ?? null });
+    } catch {
+      setVpn({ vpn: false, reason: null });
+    } finally {
+      setVpnChecking(false);
+    }
+  };
 
   const runChecks = async () => {
     if (hasRun.current) return;
@@ -96,16 +103,32 @@ function SystemCheckContent() {
     const device = detectDevice();
     const partial: CheckResult = { downloadSpeed: null, uploadSpeed: null, micPermitted: null, speakerPermitted: true, ...device };
 
+    // Silent diagnostics (admin-only) gathered alongside the visible checks.
+    const diag = collectStaticDiagnostics();
+
     let download = 0, upload = 0;
     try {
-      const speeds = await measureSpeed();
+      const [speeds, lat] = await Promise.all([measureSpeed(), measureLatency()]);
       download = speeds.download;
       upload   = speeds.upload;
+      diag.networkLatency = lat.latency;
+      diag.networkJitter = lat.jitter;
     } catch {
       toast.error('Could not measure network speed. Please check your connection.');
     }
 
-    const micOk = await checkMicPermission();
+    // Mic permission + sample for level/noise (admin-only).
+    let micOk = false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micOk = true;
+      const mic = await measureMic(stream);
+      diag.micInputLevel = mic.micInputLevel;
+      diag.backgroundNoise = mic.backgroundNoise;
+      stream.getTracks().forEach((t) => t.stop());
+    } catch { micOk = false; }
+
+    diagRef.current = diag;
 
     const final: CheckResult = {
       ...partial,
@@ -121,6 +144,7 @@ function SystemCheckContent() {
 
   useEffect(() => {
     if (!candidateId) { router.replace('/apply'); return; }
+    runVpnCheck();
     runChecks();
   }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -142,6 +166,7 @@ function SystemCheckContent() {
         browser:          result.browser,
         micPermitted:     result.micPermitted,
         speakerPermitted: result.speakerPermitted,
+        ...(diagRef.current ?? {}),
       });
       router.push(`/apply/audio?id=${candidateId}`);
     } catch {
@@ -168,6 +193,27 @@ function SystemCheckContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center p-4">
+      {/* VPN / proxy block — candidate must disable their VPN to continue */}
+      {vpn?.vpn === true && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
+            <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+              <ShieldAlert size={28} className="text-red-500" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Please turn off your VPN</h2>
+            <p className="text-sm text-gray-600 leading-relaxed mb-2">
+              We detected that you may be using a VPN or proxy. For a fair and secure assessment,
+              please disable it before continuing.
+            </p>
+            {vpn.reason && <p className="text-xs text-gray-400 mb-4">{vpn.reason}</p>}
+            <button onClick={runVpnCheck} disabled={vpnChecking}
+              className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors">
+              {vpnChecking ? <Loader2 size={16} className="animate-spin" /> : null}
+              {vpnChecking ? 'Re-checking…' : "I've turned it off — Re-check"}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="w-full max-w-lg">
         <div className="text-center mb-6">
           <div className="inline-flex items-center gap-2 bg-white/10 text-white rounded-full px-4 py-1.5 text-sm mb-4">

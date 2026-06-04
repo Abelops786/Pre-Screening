@@ -99,13 +99,13 @@ export function getReadingTask(language?: string | null): ReadingTask {
       mode: 'read',
       language: lang,
       passage,
-      instruction: `Please read the passage below aloud in ${lang}, clearly and at a natural pace. You don't need to finish the whole passage — keep reading for at least 30 seconds.`,
+      instruction: `Please read the passage below aloud in ${lang}, clearly and at a natural pace. You don't need to finish the whole passage — keep reading for at least 15 seconds.`,
     };
   }
   return {
     mode: 'speak',
     language: lang,
     passage: TOPIC,
-    instruction: `Please speak in ${lang} for at least 30 seconds about ${TOPIC}. Speak naturally and clearly.`,
+    instruction: `Please speak in ${lang} for at least 15 seconds about ${TOPIC}. Speak naturally and clearly.`,
   };
 }

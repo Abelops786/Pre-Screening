@@ -16,6 +16,9 @@ const submitValidation = [
 // Public endpoint – candidate submits application
 router.post('/', submitValidation, candidateController.submit);
 
+// Public endpoint – VPN/proxy pre-check (run before Level 1 starts)
+router.get('/vpn-check', candidateController.vpnCheck);
+
 // Public endpoint – save system check results for a candidate session
 router.post('/:id/system-check', candidateController.saveSystemCheck);
 

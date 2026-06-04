@@ -114,6 +114,21 @@ export interface SystemCheck {
   speakerPermitted: boolean;
   passed: boolean;
   checkedAt: string;
+  // Extended diagnostics (admin/recruiter-only)
+  screenResolution?: string | null;
+  cpuCores?: number | null;
+  deviceMemory?: number | null;
+  connectionType?: string | null;
+  networkLatency?: number | null;
+  networkJitter?: number | null;
+  micInputLevel?: number | null;
+  backgroundNoise?: number | null;
+  browserVersion?: string | null;
+  timezone?: string | null;
+  ipAddress?: string | null;
+  ipCountry?: string | null;
+  vpnDetected?: boolean | null;
+  vpnReason?: string | null;
 }
 
 export interface AudioRecording {
