@@ -238,7 +238,7 @@ const saveSystemCheck = async (req, res, next) => {
       // extended diagnostics (admin/recruiter-only)
       screenResolution, cpuCores, deviceMemory, connectionType,
       networkLatency, networkJitter, micInputLevel, backgroundNoise,
-      browserVersion, timezone,
+      browserVersion, timezone, cpuArchitecture, gpuRenderer,
     } = req.body;
 
     const candidate = await prisma.candidate.findUnique({
@@ -280,6 +280,8 @@ const saveSystemCheck = async (req, res, next) => {
       backgroundNoise: num(backgroundNoise) != null ? Math.round(num(backgroundNoise)) : null,
       browserVersion:  browserVersion ?? null,
       timezone:        timezone ?? null,
+      cpuArchitecture: cpuArchitecture ?? null,
+      gpuRenderer:     gpuRenderer ?? null,
       ipAddress:       ip || null,
       ipCountry:       vpn.country ?? null,
       vpnDetected:     vpn.vpn,

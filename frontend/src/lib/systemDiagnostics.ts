@@ -15,6 +15,39 @@ export interface Diagnostics {
   backgroundNoise: number | null;  // 0–100 avg
   browserVersion: string | null;
   timezone: string | null;
+  cpuArchitecture: string | null;  // e.g. "x86-64bit" (browsers can't expose CPU model/generation)
+  gpuRenderer: string | null;      // e.g. "Intel(R) UHD Graphics 630" — best hint at the hardware era
+}
+
+// GPU / graphics chip via WebGL. The integrated-GPU name is the closest signal
+// to the actual CPU on a web page (browsers never expose the CPU model itself).
+export function detectGpu(): string | null {
+  try {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+    if (!gl) return null;
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const raw = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    if (typeof raw !== 'string' || !raw) return null;
+    // Pull the human-readable chip name out of strings like
+    // "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 ..., D3D11)"
+    const angle = raw.match(/ANGLE \(([^,]+),\s*([^,]+?)(?:\s*\([^)]*\))?\s*(?:Direct3D|OpenGL|Vulkan|,|$)/i);
+    const name = angle ? angle[2].trim() : raw.replace(/\s*\([^)]*\)/g, '').trim();
+    return (name || raw).slice(0, 120);
+  } catch { return null; }
+}
+
+// CPU architecture/bitness via User-Agent Client Hints (async, Chromium only).
+export async function getCpuArchitecture(): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const uaData = (navigator as any).userAgentData;
+    if (!uaData?.getHighEntropyValues) return null;
+    const hev = await uaData.getHighEntropyValues(['architecture', 'bitness']);
+    if (!hev?.architecture) return null;
+    return `${hev.architecture}${hev.bitness ? `-${hev.bitness}bit` : ''}`;
+  } catch { return null; }
 }
 
 // Parse a friendly "Browser 124" version string from the UA.
@@ -52,6 +85,8 @@ export function collectStaticDiagnostics(): Diagnostics {
     browserVersion: detectBrowserVersion(),
     timezone:
       typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || null : null,
+    cpuArchitecture: null, // filled in asynchronously via getCpuArchitecture()
+    gpuRenderer: detectGpu(),
   };
 }
 

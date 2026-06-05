@@ -125,6 +125,8 @@ export interface SystemCheck {
   backgroundNoise?: number | null;
   browserVersion?: string | null;
   timezone?: string | null;
+  cpuArchitecture?: string | null;
+  gpuRenderer?: string | null;
   ipAddress?: string | null;
   ipCountry?: string | null;
   vpnDetected?: boolean | null;

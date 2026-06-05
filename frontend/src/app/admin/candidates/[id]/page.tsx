@@ -271,6 +271,8 @@ export default function CandidateProfilePage() {
               {sc.connectionType && <Row label="Connection Type" value={sc.connectionType} />}
               {sc.screenResolution && <Row label="Screen Resolution" value={sc.screenResolution} />}
               {(sc.cpuCores != null) && <Row label="CPU Cores" value={String(sc.cpuCores)} />}
+              {sc.cpuArchitecture && <Row label="CPU Architecture" value={sc.cpuArchitecture} />}
+              {sc.gpuRenderer && <Row label="Graphics (GPU)" value={<span className="text-right break-words">{sc.gpuRenderer}</span>} />}
               {(sc.deviceMemory != null) && <Row label="Device Memory" value={`${sc.deviceMemory} GB`} />}
               {(sc.micInputLevel != null) && <Row label="Mic Input Level" value={
                 <span className={sc.micInputLevel > 2 ? 'text-green-600' : 'text-amber-600'}>{sc.micInputLevel}/100{sc.micInputLevel <= 2 ? ' (very low — mic may be muted)' : ''}</span>

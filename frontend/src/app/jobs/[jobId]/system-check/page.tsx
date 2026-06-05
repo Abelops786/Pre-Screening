@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
 import { Wifi, CheckCircle, XCircle, Loader2, Monitor, Mic, ShieldAlert } from 'lucide-react';
-import { collectStaticDiagnostics, measureLatency, measureMic, type Diagnostics } from '@/lib/systemDiagnostics';
+import { collectStaticDiagnostics, measureLatency, measureMic, getCpuArchitecture, type Diagnostics } from '@/lib/systemDiagnostics';
 
 type SpeedResult = { download: number; upload: number };
 
@@ -165,9 +165,10 @@ function SystemCheckContent() {
       stream.getTracks().forEach((t) => t.stop());
     } catch { setMicGranted(false); }
 
-    const [result, lat] = await Promise.all([measureSpeed(), measureLatency()]);
+    const [result, lat, arch] = await Promise.all([measureSpeed(), measureLatency(), getCpuArchitecture()]);
     diag.networkLatency = lat.latency;
     diag.networkJitter = lat.jitter;
+    diag.cpuArchitecture = arch;
     diagRef.current = diag;
 
     setSpeed(result);

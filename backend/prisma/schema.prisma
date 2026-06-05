@@ -199,6 +199,8 @@ model SystemCheck {
   backgroundNoise  Int?     @map("background_noise")  // 0–100 ambient noise
   browserVersion   String?  @map("browser_version")
   timezone         String?  @map("timezone")          // browser IANA tz
+  cpuArchitecture  String?  @map("cpu_architecture")  // e.g. x86-64bit
+  gpuRenderer      String?  @map("gpu_renderer")       // integrated/discrete GPU name (hints at CPU era)
   ipAddress        String?  @map("ip_address")
   ipCountry        String?  @map("ip_country")
   vpnDetected      Boolean? @map("vpn_detected")

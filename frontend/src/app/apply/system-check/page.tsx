@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
 import { Wifi, Mic, Monitor, CheckCircle, XCircle, Loader2, AlertTriangle, ShieldAlert } from 'lucide-react';
-import { collectStaticDiagnostics, measureLatency, measureMic, type Diagnostics } from '@/lib/systemDiagnostics';
+import { collectStaticDiagnostics, measureLatency, measureMic, getCpuArchitecture, type Diagnostics } from '@/lib/systemDiagnostics';
 
 interface CheckResult {
   downloadSpeed: number | null;
@@ -108,11 +108,12 @@ function SystemCheckContent() {
 
     let download = 0, upload = 0;
     try {
-      const [speeds, lat] = await Promise.all([measureSpeed(), measureLatency()]);
+      const [speeds, lat, arch] = await Promise.all([measureSpeed(), measureLatency(), getCpuArchitecture()]);
       download = speeds.download;
       upload   = speeds.upload;
       diag.networkLatency = lat.latency;
       diag.networkJitter = lat.jitter;
+      diag.cpuArchitecture = arch;
     } catch {
       toast.error('Could not measure network speed. Please check your connection.');
     }
