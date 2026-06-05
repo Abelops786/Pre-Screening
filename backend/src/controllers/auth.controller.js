@@ -47,6 +47,51 @@ const getMe = async (req, res, next) => {
   }
 };
 
+// Self-service: the logged-in user updates their own name / email / password.
+// Changing email or password requires the current password for security.
+const updateMe = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return error(res, 'Validation failed', 422, errors.array());
+
+    const { name, email, currentPassword, newPassword } = req.body;
+    const me = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!me) return error(res, 'User not found', 404);
+
+    const changingEmail    = email && email !== me.email;
+    const changingPassword = !!newPassword;
+
+    if (changingEmail || changingPassword) {
+      if (!currentPassword) return error(res, 'Please enter your current password to change your email or password', 400);
+      const ok = await bcrypt.compare(currentPassword, me.passwordHash);
+      if (!ok) return error(res, 'Current password is incorrect', 401);
+    }
+
+    const data = {};
+    if (name !== undefined && String(name).trim()) data.name = String(name).trim();
+    if (changingEmail) {
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing && existing.id !== me.id) return error(res, 'That email address is already in use', 409);
+      data.email = email;
+    }
+    if (changingPassword) data.passwordHash = await bcrypt.hash(newPassword, 12);
+
+    if (Object.keys(data).length === 0) return error(res, 'Nothing to update', 400);
+
+    const updated = await prisma.user.update({
+      where: { id: me.id },
+      data,
+      select: { id: true, email: true, name: true, role: true, department: true },
+    });
+
+    // Re-issue the token since name/email are embedded in it.
+    const token = signToken(updated);
+    return success(res, { user: updated, token }, 'Profile updated');
+  } catch (err) {
+    next(err);
+  }
+};
+
 const createUser = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -109,4 +154,4 @@ const deleteUser = async (req, res, next) => {
   }
 };
 
-module.exports = { login, getMe, createUser, listUsers, updateUser, deleteUser };
+module.exports = { login, getMe, updateMe, createUser, listUsers, updateUser, deleteUser };

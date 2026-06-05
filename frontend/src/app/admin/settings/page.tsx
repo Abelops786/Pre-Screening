@@ -3,8 +3,102 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
-import type { ScoringConfig } from '@/types';
-import { CheckCircle, Link as LinkIcon, RefreshCw, AlertCircle, Loader2, SlidersHorizontal, Save } from 'lucide-react';
+import type { ScoringConfig, User } from '@/types';
+import { getStoredUser, storeAuth, getStoredToken } from '@/lib/auth';
+import { CheckCircle, Link as LinkIcon, RefreshCw, AlertCircle, Loader2, SlidersHorizontal, Save, UserCog, Eye, EyeOff } from 'lucide-react';
+
+function AccountCard() {
+  const [name, setName]   = useState('');
+  const [email, setEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword]         = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const u = getStoredUser();
+    if (u) { setName(u.name || ''); setEmail(u.email || ''); }
+  }, []);
+
+  const save = async () => {
+    const changingEmail = email.trim() !== (getStoredUser()?.email || '');
+    const changingPw    = !!newPassword;
+
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error('Please enter a valid email address'); return; }
+    if (changingPw && newPassword.length < 8) { toast.error('New password must be at least 8 characters'); return; }
+    if (changingPw && newPassword !== confirmPassword) { toast.error('New password and confirmation do not match'); return; }
+    if ((changingEmail || changingPw) && !currentPassword) { toast.error('Enter your current password to change email or password'); return; }
+
+    setSaving(true);
+    try {
+      const payload: Record<string, string> = { name: name.trim(), email: email.trim() };
+      if (currentPassword) payload.currentPassword = currentPassword;
+      if (changingPw)      payload.newPassword = newPassword;
+
+      const { data } = await api.patch('/auth/me', payload);
+      // Persist the refreshed token + user so the change takes effect immediately.
+      const token = data.data?.token || getStoredToken();
+      if (token && data.data?.user) storeAuth(token, data.data.user as User);
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      toast.success('Account updated successfully');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to update account');
+    } finally { setSaving(false); }
+  };
+
+  const field = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500';
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h2 className="text-lg font-semibold text-gray-800 mb-1 flex items-center gap-2">
+        <UserCog size={18} className="text-brand-600" /> My Account
+      </h2>
+      <p className="text-sm text-gray-500 mb-4">Change your own login email and password. Your current password is required to change either.</p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} className={field} placeholder="Your name" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="username" className={field} placeholder="you@example.com" />
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-gray-100 pt-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Change password</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="relative">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Current password</label>
+            <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type={showPw ? 'text' : 'password'} autoComplete="current-password" className={field} placeholder="Required to change" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">New password</label>
+            <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type={showPw ? 'text' : 'password'} autoComplete="new-password" className={field} placeholder="Min. 8 characters" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Confirm new password</label>
+            <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type={showPw ? 'text' : 'password'} autoComplete="new-password" className={field} placeholder="Re-type new password" />
+          </div>
+        </div>
+        <button type="button" onClick={() => setShowPw((s) => !s)} className="mt-2 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
+          {showPw ? <EyeOff size={13} /> : <Eye size={13} />} {showPw ? 'Hide' : 'Show'} passwords
+        </button>
+        <p className="text-xs text-gray-400 mt-1">Leave the password fields blank if you only want to change your name or email.</p>
+      </div>
+
+      <div className="flex justify-end mt-5">
+        <button onClick={save} disabled={saving}
+          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+          {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save Account
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ScoringCard() {
   const [cfg, setCfg] = useState<ScoringConfig | null>(null);
@@ -117,6 +211,8 @@ function SettingsContent() {
           <p className="text-sm font-medium">Failed to connect to Microsoft. Please check your credentials and try again.</p>
         </div>
       )}
+
+      <AccountCard />
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6">

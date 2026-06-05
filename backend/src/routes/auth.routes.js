@@ -17,8 +17,15 @@ const createUserValidation = [
   body('department').optional().trim(),
 ];
 
+const updateMeValidation = [
+  body('email').optional().isEmail().normalizeEmail(),
+  body('newPassword').optional().isLength({ min: 8 }).withMessage('New password must be at least 8 characters'),
+  body('name').optional().trim(),
+];
+
 router.post('/login',  loginValidation,      authController.login);
 router.get('/me',      authenticate,         authController.getMe);
+router.patch('/me',    authenticate, updateMeValidation, authController.updateMe);
 router.post('/users',  authenticate, isSuperAdmin, createUserValidation, authController.createUser);
 router.get('/users',   authenticate, isSuperAdmin, authController.listUsers);
 router.patch('/users/:id',  authenticate, isSuperAdmin, authController.updateUser);
