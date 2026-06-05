@@ -6,7 +6,7 @@ import { getStoredUser } from '@/lib/auth';
 import { toast } from 'react-toastify';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { UserPlus, Trash2, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { UserPlus, Trash2, Loader2, CheckCircle, XCircle, KeyRound, Eye, EyeOff, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -28,6 +28,12 @@ export default function UsersPage() {
   const [showForm,  setShowForm] = useState(false);
   const [creating,  setCreating] = useState(false);
   const [deleting,  setDeleting] = useState<string | null>(null);
+  // Reset-password modal state
+  const [resetUser,  setResetUser]  = useState<User | null>(null);
+  const [newPw,      setNewPw]      = useState('');
+  const [confirmPw,  setConfirmPw]  = useState('');
+  const [showPw,     setShowPw]     = useState(false);
+  const [resetting,  setResetting]  = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -68,6 +74,26 @@ export default function UsersPage() {
       toast.success('User updated');
       await fetchUsers();
     } catch { toast.error('Failed to update user'); }
+  };
+
+  const openReset = (user: User) => {
+    setResetUser(user);
+    setNewPw(''); setConfirmPw(''); setShowPw(false);
+  };
+
+  const submitReset = async () => {
+    if (!resetUser) return;
+    if (newPw.length < 8) { toast.error('Password must be at least 8 characters'); return; }
+    if (newPw !== confirmPw) { toast.error('Passwords do not match'); return; }
+    setResetting(true);
+    try {
+      await api.patch(`/auth/users/${resetUser.id}`, { password: newPw });
+      toast.success(`Password updated for ${resetUser.name}`);
+      setResetUser(null);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to reset password';
+      toast.error(msg);
+    } finally { setResetting(false); }
   };
 
   const deleteUser = async (id: string) => {
@@ -180,15 +206,25 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{format(new Date(u.createdAt!), 'dd MMM yyyy')}</td>
                   <td className="px-4 py-3">
-                    {u.role !== 'SUPER_ADMIN' && (
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={() => deleteUser(u.id)}
-                        disabled={deleting === u.id}
-                        className="text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors"
+                        onClick={() => openReset(u)}
+                        title="Reset password"
+                        className="text-gray-400 hover:text-brand-600 transition-colors"
                       >
-                        {deleting === u.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        <KeyRound size={16} />
                       </button>
-                    )}
+                      {u.role !== 'SUPER_ADMIN' && (
+                        <button
+                          onClick={() => deleteUser(u.id)}
+                          disabled={deleting === u.id}
+                          title="Delete user"
+                          className="text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors"
+                        >
+                          {deleting === u.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -196,6 +232,48 @@ export default function UsersPage() {
           </table>
         </div>
       </div>
+
+      {/* Reset password modal */}
+      {resetUser && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !resetting && setResetUser(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <KeyRound size={18} className="text-brand-600" /> Reset Password
+              </h2>
+              <button onClick={() => setResetUser(null)} disabled={resetting} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Set a new password for <span className="font-medium text-gray-700">{resetUser.name}</span> ({resetUser.email}).</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">New password</label>
+                <input value={newPw} onChange={(e) => setNewPw(e.target.value)} type={showPw ? 'text' : 'password'} autoComplete="new-password"
+                  className={inputClass} placeholder="Min. 8 characters" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Confirm new password</label>
+                <input value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} type={showPw ? 'text' : 'password'} autoComplete="new-password"
+                  className={inputClass} placeholder="Re-type new password" />
+              </div>
+              <button type="button" onClick={() => setShowPw((s) => !s)} className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
+                {showPw ? <EyeOff size={13} /> : <Eye size={13} />} {showPw ? 'Hide' : 'Show'} password
+              </button>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setResetUser(null)} disabled={resetting}
+                className="text-sm text-gray-600 hover:text-gray-800 rounded-lg px-4 py-2">Cancel</button>
+              <button onClick={submitReset} disabled={resetting}
+                className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                {resetting ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />} Update Password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
