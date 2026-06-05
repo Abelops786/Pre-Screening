@@ -10,7 +10,6 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, FileText, Mic, Wifi, Monitor, Loader2, Send,
   CheckCircle, XCircle, AlertTriangle, Flag, Video, ClipboardList, CalendarClock,
-  ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import { DEPT_LABELS, DEPT_COLORS } from '@/types';
 
@@ -234,57 +233,23 @@ export default function CandidateProfilePage() {
       {/* System Check */}
       <Section title="System Check" icon={<Monitor size={18} />}>
         {sc ? (
-          <>
-            {/* VPN / proxy flag — most important security signal first */}
-            {sc.vpnDetected === true ? (
-              <div className="mb-4 bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-start gap-2 text-rose-700">
-                <ShieldAlert size={18} className="text-rose-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold">VPN / Proxy detected</p>
-                  {sc.vpnReason && <p className="text-xs mt-0.5 text-rose-600">{sc.vpnReason}</p>}
-                </div>
-              </div>
-            ) : sc.vpnDetected === false ? (
-              <div className="mb-4 bg-green-50 border border-green-200 rounded-xl p-2.5 flex items-center gap-2 text-green-700">
-                <ShieldCheck size={16} className="text-green-500 shrink-0" />
-                <p className="text-xs font-medium">No VPN / proxy detected</p>
-              </div>
-            ) : null}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
-              <Row label="Download Speed" value={
-                <span className="flex items-center gap-1">
-                  {sc.downloadSpeed} Mbps
-                  {sc.downloadSpeed >= 5 ? <CheckCircle size={14} className="text-green-500" /> : <XCircle size={14} className="text-red-500" />}
-                </span>
-              } />
-              <Row label="Upload Speed" value={
-                <span className="flex items-center gap-1">
-                  {sc.uploadSpeed} Mbps
-                  {sc.uploadSpeed >= 2 ? <CheckCircle size={14} className="text-green-500" /> : <XCircle size={14} className="text-red-500" />}
-                </span>
-              } />
-              <Row label="Microphone" value={sc.micPermitted ? <span className="text-green-600">Granted</span> : <span className="text-red-600">Denied</span>} />
-              <Row label="Device" value={`${sc.os} / ${sc.browser} (${sc.deviceType})`} />
-              {sc.browserVersion && <Row label="Browser Version" value={sc.browserVersion} />}
-              {(sc.networkLatency != null) && <Row label="Latency / Jitter" value={`${sc.networkLatency} ms${sc.networkJitter != null ? ` / ${sc.networkJitter} ms jitter` : ''}`} />}
-              {sc.connectionType && <Row label="Connection Type" value={sc.connectionType} />}
-              {sc.screenResolution && <Row label="Screen Resolution" value={sc.screenResolution} />}
-              {(sc.cpuCores != null) && <Row label="CPU Cores" value={String(sc.cpuCores)} />}
-              {sc.cpuArchitecture && <Row label="CPU Architecture" value={sc.cpuArchitecture} />}
-              {sc.gpuRenderer && <Row label="Graphics (GPU)" value={<span className="text-right break-words">{sc.gpuRenderer}</span>} />}
-              {(sc.deviceMemory != null) && <Row label="Device Memory" value={`${sc.deviceMemory} GB`} />}
-              {(sc.micInputLevel != null) && <Row label="Mic Input Level" value={
-                <span className={sc.micInputLevel > 2 ? 'text-green-600' : 'text-amber-600'}>{sc.micInputLevel}/100{sc.micInputLevel <= 2 ? ' (very low — mic may be muted)' : ''}</span>
-              } />}
-              {(sc.backgroundNoise != null) && <Row label="Background Noise" value={
-                <span className={sc.backgroundNoise <= 15 ? 'text-green-600' : sc.backgroundNoise <= 35 ? 'text-amber-600' : 'text-red-600'}>{sc.backgroundNoise}/100{sc.backgroundNoise > 35 ? ' (noisy)' : sc.backgroundNoise <= 15 ? ' (quiet)' : ''}</span>
-              } />}
-              {sc.timezone && <Row label="Timezone" value={sc.timezone} />}
-              {sc.ipAddress && <Row label="IP Address" value={`${sc.ipAddress}${sc.ipCountry ? ` (${sc.ipCountry})` : ''}`} />}
-              <Row label="Result" value={sc.passed ? <span className="text-green-600 font-semibold">Passed</span> : <span className="text-red-600 font-semibold">Failed</span>} />
-            </div>
-          </>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+            <Row label="Download Speed" value={
+              <span className="flex items-center gap-1">
+                {sc.downloadSpeed} Mbps
+                {sc.downloadSpeed >= 5 ? <CheckCircle size={14} className="text-green-500" /> : <XCircle size={14} className="text-red-500" />}
+              </span>
+            } />
+            <Row label="Upload Speed" value={
+              <span className="flex items-center gap-1">
+                {sc.uploadSpeed} Mbps
+                {sc.uploadSpeed >= 2 ? <CheckCircle size={14} className="text-green-500" /> : <XCircle size={14} className="text-red-500" />}
+              </span>
+            } />
+            <Row label="Microphone" value={sc.micPermitted ? <span className="text-green-600">Granted</span> : <span className="text-red-600">Denied</span>} />
+            <Row label="Device" value={`${sc.os} / ${sc.browser} (${sc.deviceType})`} />
+            <Row label="Result" value={sc.passed ? <span className="text-green-600 font-semibold">Passed</span> : <span className="text-red-600 font-semibold">Failed</span>} />
+          </div>
         ) : <p className="text-sm text-gray-400">No system check data</p>}
       </Section>
 
