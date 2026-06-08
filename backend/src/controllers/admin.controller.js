@@ -16,27 +16,28 @@ const CANDIDATE_INCLUDE = {
 
 const getAnalytics = async (req, res, next) => {
   try {
-    // For RECRUITER: only count their assigned candidates
+    // For RECRUITER: only count their assigned candidates. Exclude soft-deleted.
     const recruiterFilter = req.user.role === 'RECRUITER'
-      ? { assignedRecruiters: { some: { recruiterId: req.user.id } } }
-      : {};
+      ? { assignedRecruiters: { some: { recruiterId: req.user.id } }, deletedAt: null }
+      : { deletedAt: null };
 
-    const [total, qualified, rejected, pending, hired, deptBreakdown] = await Promise.all([
+    const [total, qualified, rejected, pending, hired, deleted, deptBreakdown] = await Promise.all([
       prisma.candidate.count({ where: recruiterFilter }),
       prisma.candidate.count({ where: { ...recruiterFilter, status: 'LEVEL1_PASSED' } }),
       prisma.candidate.count({ where: { ...recruiterFilter, status: 'REJECTED' } }),
       prisma.candidate.count({ where: { ...recruiterFilter, status: { in: ['PENDING', 'AUDIO_PENDING', 'PROCESSING'] } } }),
       prisma.candidate.count({ where: { ...recruiterFilter, status: 'HIRED' } }),
+      req.user.role === 'SUPER_ADMIN' ? prisma.candidate.count({ where: { deletedAt: { not: null } } }) : Promise.resolve(0),
       prisma.candidate.groupBy({ by: ['department'], where: { ...recruiterFilter, department: { not: null } }, _count: { id: true } }),
     ]);
 
     // Language breakdown for original-flow candidates
     const languageBreakdown = req.user.role !== 'RECRUITER'
-      ? await prisma.candidate.groupBy({ by: ['selectedLanguage'], where: { selectedLanguage: { not: null } }, _count: { id: true } })
+      ? await prisma.candidate.groupBy({ by: ['selectedLanguage'], where: { selectedLanguage: { not: null }, deletedAt: null }, _count: { id: true } })
       : [];
 
     return success(res, {
-      kpi: { total, qualified, rejected, pending, hired },
+      kpi: { total, qualified, rejected, pending, hired, deleted },
       deptBreakdown: deptBreakdown.map((d) => ({ department: d.department, count: d._count.id })),
       languageBreakdown: languageBreakdown.map((l) => ({ language: l.selectedLanguage, count: l._count.id })),
     });
@@ -53,7 +54,7 @@ const listCandidates = async (req, res, next) => {
       sortBy = 'createdAt', sortOrder = 'desc',
     } = req.query;
 
-    const where = {};
+    const where = { deletedAt: null };
     if (search) {
       where.OR = [
         { fullName: { contains: search, mode: 'insensitive' } },
@@ -235,6 +236,7 @@ const getNotes = async (req, res, next) => {
 const exportCsv = async (req, res, next) => {
   try {
     const candidates = await prisma.candidate.findMany({
+      where: { deletedAt: null },
       include: { systemCheck: true, audioRecording: true, filterResult: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -260,10 +262,52 @@ const exportCsv = async (req, res, next) => {
   }
 };
 
+// Soft delete — moves the candidate to the Deleted bin (kept 15 days).
 const deleteCandidate = async (req, res, next) => {
   try {
+    await prisma.candidate.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
+    return success(res, {}, 'Candidate moved to Deleted (kept for 15 days)');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// List soft-deleted candidates with how long until they are auto-purged.
+const listDeleted = async (req, res, next) => {
+  try {
+    const rows = await prisma.candidate.findMany({
+      where: { deletedAt: { not: null } },
+      select: { id: true, fullName: true, email: true, phone: true, status: true, deletedAt: true,
+        job: { select: { title: true, departmentLabel: true, department: true } } },
+      orderBy: { deletedAt: 'desc' },
+    });
+    const RETENTION_DAYS = 15;
+    const candidates = rows.map((c) => {
+      const purgeAt = new Date(new Date(c.deletedAt).getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000);
+      const daysLeft = Math.max(0, Math.ceil((purgeAt - Date.now()) / (24 * 60 * 60 * 1000)));
+      return { ...c, purgeAt, daysLeft };
+    });
+    return success(res, { candidates, retentionDays: RETENTION_DAYS });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Restore a soft-deleted candidate.
+const restoreCandidate = async (req, res, next) => {
+  try {
+    await prisma.candidate.update({ where: { id: req.params.id }, data: { deletedAt: null } });
+    return success(res, {}, 'Candidate restored');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Permanently delete (Super Admin) — removes the record for good.
+const permanentDeleteCandidate = async (req, res, next) => {
+  try {
     await prisma.candidate.delete({ where: { id: req.params.id } });
-    return success(res, {}, 'Candidate deleted');
+    return success(res, {}, 'Candidate permanently deleted');
   } catch (err) {
     next(err);
   }
@@ -361,4 +405,4 @@ const sendReportNow = async (req, res, next) => {
   }
 };
 
-module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, rejectCandidate, hireCandidate, assignRecruiter, deleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink, getScoringConfig, updateScoringConfig, sendReportNow };
+module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, rejectCandidate, hireCandidate, assignRecruiter, deleteCandidate, listDeleted, restoreCandidate, permanentDeleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink, getScoringConfig, updateScoringConfig, sendReportNow };

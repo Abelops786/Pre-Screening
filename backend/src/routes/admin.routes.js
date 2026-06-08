@@ -11,6 +11,11 @@ router.get('/analytics', isRecruiter, adminController.getAnalytics);
 
 // Candidate management — list is filtered per role inside controller
 router.get('/candidates',              isRecruiter, adminController.listCandidates);
+// Soft-deleted bin + restore + permanent delete (Super Admin only).
+// NOTE: these must be declared before '/candidates/:id' so 'deleted' isn't treated as an id.
+router.get('/candidates/deleted',           isSuperAdmin, adminController.listDeleted);
+router.post('/candidates/:id/restore',      isSuperAdmin, adminController.restoreCandidate);
+router.delete('/candidates/:id/permanent',  isSuperAdmin, adminController.permanentDeleteCandidate);
 router.get('/candidates/:id',          isRecruiter, adminController.getCandidate);
 router.patch('/candidates/:id/status', isAdmin, adminController.updateStatus);
 // Recruiters (for their own assigned candidates) and admins can reject/hire

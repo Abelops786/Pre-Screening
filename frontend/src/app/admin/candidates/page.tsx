@@ -4,16 +4,19 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import type { Candidate, CandidateStatus } from '@/types';
 import { STATUS_LABELS, STATUS_COLORS, DEPT_LABELS, DEPT_COLORS } from '@/types';
+import { getStoredUser } from '@/lib/auth';
 import { toast } from 'react-toastify';
 import { Search, Download, ChevronLeft, ChevronRight, Loader2, Eye, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const ALL_STATUSES: CandidateStatus[] = [
   'PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING',
-  'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED',
+  'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED', 'HIRED',
 ];
 
 export default function CandidatesPage() {
+  const currentUser = getStoredUser();
+  const canManage = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'ADMIN';
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [search,     setSearch]     = useState('');
@@ -46,10 +49,10 @@ export default function CandidatesPage() {
   useEffect(() => { setPage(1); }, [search, status, dept]);
 
   const deleteCandidate = async (id: string, name: string) => {
-    if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+    if (!confirm(`Move ${name} to Deleted? They'll be kept for 15 days and can be restored from the Overview page.`)) return;
     try {
       await api.delete(`/admin/candidates/${id}`);
-      toast.success(`${name} deleted`);
+      toast.success(`${name} moved to Deleted`);
       fetchCandidates();
     } catch {
       toast.error('Failed to delete candidate');
@@ -73,10 +76,12 @@ export default function CandidatesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Candidates</h1>
           <p className="text-gray-500 text-sm">{total} total</p>
         </div>
-        <button onClick={exportCsv}
-          className="flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg px-4 py-2 transition-colors">
-          <Download size={16} /> Export CSV
-        </button>
+        {canManage && (
+          <button onClick={exportCsv}
+            className="flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+            <Download size={16} /> Export CSV
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -154,10 +159,12 @@ export default function CandidatesPage() {
                         className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700 text-xs font-medium">
                         <Eye size={14} /> View
                       </Link>
-                      <button onClick={() => deleteCandidate(c.id, c.fullName)}
-                        className="inline-flex items-center gap-1 text-red-500 hover:text-red-700 text-xs font-medium">
-                        <Trash2 size={14} /> Delete
-                      </button>
+                      {canManage && (
+                        <button onClick={() => deleteCandidate(c.id, c.fullName)}
+                          className="inline-flex items-center gap-1 text-red-500 hover:text-red-700 text-xs font-medium">
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
