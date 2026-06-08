@@ -4,8 +4,9 @@ import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
-import { Mic, Square, Upload, Loader2, RefreshCw, Clock, CheckCircle } from 'lucide-react';
+import { Mic, Square, Upload, Loader2, RefreshCw, Clock, CheckCircle, CalendarClock } from 'lucide-react';
 import { getReadingTask, type ReadingTask } from '@/lib/readingPassages';
+import BookingCalendar from '@/components/BookingCalendar';
 
 const MAX_SECONDS = 90;
 const MIN_SECONDS = 15; // minimum required recording length
@@ -50,7 +51,8 @@ function AudioContent() {
   const [elapsed,   setElapsed]  = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl,  setAudioUrl]  = useState<string | null>(null);
-  const [result,    setResult]    = useState<{ qualified: boolean; fluencyScore: number | null; flaggedForHumanReview?: boolean } | null>(null);
+  const [result,    setResult]    = useState<{ qualified: boolean; fluencyScore: number | null; aiFluencyScore?: number | null; flaggedForHumanReview?: boolean } | null>(null);
+  const [showBooking, setShowBooking] = useState(false);
 
   useEffect(() => () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -240,11 +242,24 @@ function AudioContent() {
                     <CheckCircle size={32} className="text-green-500" />
                   </div>
                   <h2 className="text-xl font-bold text-green-700">Level 1 Passed!</h2>
-                  <p className="text-gray-600 text-sm">Congratulations! You have successfully passed the initial screening. A recruiter will be in touch via email.</p>
-                  {result.fluencyScore !== null && (
+                  <p className="text-gray-600 text-sm">Congratulations! You have successfully passed the initial screening. You will receive an email with an interview schedule link. Please check your email and pick a time for your interview.</p>
+                  {(result.aiFluencyScore ?? result.fluencyScore) !== null && (
                     <div className="inline-block bg-green-50 border border-green-200 rounded-xl px-4 py-2">
                       <p className="text-xs text-green-600 font-medium">Fluency Score</p>
-                      <p className="text-2xl font-bold text-green-700">{result.fluencyScore}%</p>
+                      <p className="text-2xl font-bold text-green-700">{result.aiFluencyScore ?? result.fluencyScore}%</p>
+                    </div>
+                  )}
+
+                  {!showBooking ? (
+                    <button onClick={() => setShowBooking(true)}
+                      className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors">
+                      <CalendarClock size={18} /> Schedule Your Interview Now →
+                    </button>
+                  ) : (
+                    <div className="border-t border-gray-100 pt-4 mt-2">
+                      <h3 className="text-base font-bold text-gray-900 mb-1">Pick your interview time</h3>
+                      <p className="text-xs text-gray-500 mb-3">Choose a slot that works for you. You&apos;ll get a confirmation by email.</p>
+                      <BookingCalendar candidateId={candidateId} />
                     </div>
                   )}
                 </>
@@ -256,12 +271,12 @@ function AudioContent() {
                   </div>
                   <h2 className="text-xl font-bold text-gray-900">Submission Complete</h2>
                   <p className="text-gray-600 text-sm">Thank you! Your responses have been received and are now under review. Our team will be in touch by email regarding the next steps.</p>
+                  <button onClick={() => router.push(`/jobs/${jobId}/complete`)}
+                    className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl py-3 transition-colors">
+                    Finish →
+                  </button>
                 </>
               )}
-              <button onClick={() => router.push(`/jobs/${jobId}/complete`)}
-                className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl py-3 transition-colors">
-                Finish →
-              </button>
             </div>
           )}
         </div>

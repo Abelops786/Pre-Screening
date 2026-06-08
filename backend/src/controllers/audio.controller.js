@@ -138,6 +138,8 @@ const processAudio = async (req, res, next) => {
       qualified: filterResult.qualified,
       // For job candidates, surface the weighted total; otherwise the fluency score
       fluencyScore: filterResult.totalScore ?? whisperResult.fluencyScore,
+      // AI fluency only (GPT 0–10 → %), shown to the candidate as their "Fluency Score"
+      aiFluencyScore: aiScore != null ? Math.round(aiScore * 10) : (whisperResult.fluencyScore ?? null),
       transcript: whisperResult.transcript,
       flaggedForHumanReview: whisperResult.flaggedForHumanReview,
     }, filterResult.qualified ? 'Congratulations! You passed Level 1.' : 'Application processed.');
