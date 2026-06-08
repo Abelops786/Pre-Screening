@@ -194,4 +194,96 @@ const sendUnderReview = async (candidate) => {
   return send(candidate.email, 'Application Received – Under Review', html, candidate.id, 'under_review');
 };
 
-module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview, sendInterviewBooked, sendStaffInterviewNotice };
+// ─── Daily summary report (to admins) ────────────────────────
+// A visually appealing digest: applications, pass/fail, per-department,
+// and per-recruiter interview counts, with a button to open the dashboard.
+const sendSummaryReport = async (to, stats) => {
+  const loginUrl = `${process.env.FRONTEND_URL || ''}/login`;
+
+  const card = (value, label, color) => `
+    <td style="padding:6px;" width="33%">
+      <div style="background:${color};border-radius:10px;padding:16px 12px;text-align:center;">
+        <div style="font-size:26px;font-weight:700;color:#0f172a;">${value}</div>
+        <div style="font-size:12px;color:#475569;margin-top:2px;">${label}</div>
+      </div>
+    </td>`;
+
+  const row = (label, value) => `
+    <tr>
+      <td style="padding:9px 14px;border-bottom:1px solid #eef2f7;color:#374151;font-size:14px;">${label}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eef2f7;color:#0f172a;font-size:14px;font-weight:700;text-align:right;">${value}</td>
+    </tr>`;
+
+  const deptRows = (stats.byDepartment || []).length
+    ? stats.byDepartment.map((d) => row(d.label, d.count)).join('')
+    : `<tr><td colspan="2" style="padding:12px 14px;color:#9ca3af;font-size:13px;text-align:center;">No new applications in this period.</td></tr>`;
+
+  const recruiterRows = (stats.byRecruiter || []).length
+    ? stats.byRecruiter.map((r) => row(r.name, `${r.count} interview${r.count === 1 ? '' : 's'}`)).join('')
+    : `<tr><td colspan="2" style="padding:12px 14px;color:#9ca3af;font-size:13px;text-align:center;">No interviews booked in this period.</td></tr>`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:620px;margin:32px auto;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);">
+    <div style="background:linear-gradient(135deg,#105279,#1f83b6);padding:30px 32px;color:#fff;">
+      <div style="font-size:13px;letter-spacing:.5px;opacity:.85;text-transform:uppercase;">Daily Recruitment Report</div>
+      <h1 style="margin:6px 0 0;font-size:24px;">${stats.periodLabel}</h1>
+    </div>
+
+    <div style="padding:26px 26px 8px;">
+      <p style="color:#374151;font-size:15px;margin:0 0 14px;">Here's how the platform performed in the last 24 hours.</p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;">
+        <tr>
+          ${card(stats.applied, 'Applications', '#e0f2fe')}
+          ${card(stats.passedLevel1, 'Passed Level 1', '#dcfce7')}
+          ${card(stats.failed, 'Failed', '#fee2e2')}
+        </tr>
+        <tr>
+          ${card(stats.hired ?? 0, 'Hired', '#d1fae5')}
+          ${card(stats.rejected ?? 0, 'Rejected', '#ffe4e6')}
+          ${card(stats.interviewsBooked ?? 0, 'Interviews Booked', '#ede9fe')}
+        </tr>
+      </table>
+    </div>
+
+    <div style="padding:18px 26px;">
+      <h2 style="font-size:15px;color:#0f172a;margin:0 0 8px;">Applications by Position</h2>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eef2f7;border-radius:10px;overflow:hidden;">
+        ${deptRows}
+      </table>
+    </div>
+
+    <div style="padding:6px 26px 20px;">
+      <h2 style="font-size:15px;color:#0f172a;margin:0 0 8px;">Interviews by Recruiter</h2>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eef2f7;border-radius:10px;overflow:hidden;">
+        ${recruiterRows}
+      </table>
+    </div>
+
+    <div style="padding:6px 26px 30px;text-align:center;">
+      <a href="${loginUrl}" style="display:inline-block;background:#105279;color:#fff;padding:13px 30px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">
+        Login to view all details
+      </a>
+    </div>
+
+    <div style="background:#f9fafb;padding:16px 26px;text-align:center;font-size:12px;color:#9ca3af;">
+      Automated daily report · TalentScreen Recruitment
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    await getTransporter().sendMail({ from: fromAddress(), to, subject: `Daily Recruitment Report – ${stats.periodLabel}`, html });
+    logger.info('Summary report sent', { to });
+    return true;
+  } catch (err) {
+    logger.error('Summary report failed', { to, error: err.message });
+    throw err;
+  }
+};
+
+module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview, sendInterviewBooked, sendStaffInterviewNotice, sendSummaryReport };

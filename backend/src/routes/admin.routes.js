@@ -33,4 +33,7 @@ router.get('/candidates/export/csv',   isAdmin, adminController.exportCsv);
 router.get('/scoring-config',   isAdmin, adminController.getScoringConfig);
 router.patch('/scoring-config', isAdmin, adminController.updateScoringConfig);
 
+// Send the daily summary report on demand (Admin+)
+router.post('/send-report',     isAdmin, adminController.sendReportNow);
+
 module.exports = router;

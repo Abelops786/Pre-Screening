@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { getStoredUser } from '@/lib/auth';
-import { Users, CheckCircle, XCircle, Clock, Loader2, CalendarClock, Video, ChevronRight, Award } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { Users, CheckCircle, XCircle, Clock, Loader2, CalendarClock, Video, ChevronRight, Award, Mail } from 'lucide-react';
 import { DEPT_LABELS, DEPT_COLORS } from '@/types';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -27,7 +28,20 @@ export default function AdminOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [interviews, setInterviews] = useState<InterviewRow[]>([]);
   const [intvCount,  setIntvCount]  = useState<{ total: number; upcoming: number }>({ total: 0, upcoming: 0 });
+  const [sendingReport, setSendingReport] = useState(false);
   const user = getStoredUser();
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+
+  const sendReport = async () => {
+    setSendingReport(true);
+    try {
+      const { data } = await api.post('/admin/send-report');
+      toast.success(data?.message || 'Report sent');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to send report');
+    } finally { setSendingReport(false); }
+  };
 
   useEffect(() => {
     api.get('/admin/analytics')
@@ -59,11 +73,20 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Overview</h1>
-        <p className="text-gray-500 text-sm">
-          {user?.role === 'RECRUITER' ? 'Your assigned candidates summary' : 'Recruitment pipeline summary'}
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Overview</h1>
+          <p className="text-gray-500 text-sm">
+            {user?.role === 'RECRUITER' ? 'Your assigned candidates summary' : 'Recruitment pipeline summary'}
+          </p>
+        </div>
+        {isAdmin && (
+          <button onClick={sendReport} disabled={sendingReport}
+            className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+            {sendingReport ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
+            {sendingReport ? 'Sending…' : 'Email report now'}
+          </button>
+        )}
       </div>
 
       {/* KPI Cards */}

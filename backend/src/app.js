@@ -71,9 +71,12 @@ app.get('/health', (_req, res) => {
 
 app.use(errorHandler);
 
+const { startReportScheduler } = require('./jobs/reportScheduler');
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Recruitment API running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
+  startReportScheduler();
 });
 
 module.exports = app;

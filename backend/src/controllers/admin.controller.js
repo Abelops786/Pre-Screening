@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const msService = require('../services/microsoft.service');
+const reportService = require('../services/report.service');
 const { success, error } = require('../utils/responseHelper');
 
 const CANDIDATE_INCLUDE = {
@@ -339,4 +340,17 @@ const updateScoringConfig = async (req, res, next) => {
   }
 };
 
-module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, rejectCandidate, hireCandidate, assignRecruiter, deleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink, getScoringConfig, updateScoringConfig };
+// Manually trigger the daily summary report (Admin+).
+const sendReportNow = async (req, res, next) => {
+  try {
+    const result = await reportService.runDailyReport();
+    if (result.sent === 0) {
+      return error(res, 'No recipients configured. Add a SUPER_ADMIN user or set REPORT_RECIPIENTS.', 400);
+    }
+    return success(res, { sent: result.sent }, `Report sent to ${result.sent} recipient(s)`);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, rejectCandidate, hireCandidate, assignRecruiter, deleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink, getScoringConfig, updateScoringConfig, sendReportNow };
