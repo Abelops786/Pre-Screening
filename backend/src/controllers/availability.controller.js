@@ -7,6 +7,23 @@ const logger = require('../utils/logger');
 const SLOT_MINUTES = 30;          // length of each bookable slot
 const HORIZON_DAYS = 14;          // how far ahead candidates can book
 const BOOKING_LEAD_MS = 60 * 60 * 1000; // candidates can't book within 1 hour of now
+// Recruiter hours are wall-clock in this business timezone. We compare "now"
+// in the SAME frame so "today" and the 1-hour rule are correct everywhere.
+const BUSINESS_TZ = process.env.BUSINESS_TZ || 'America/New_York';
+
+// Current wall-clock time in BUSINESS_TZ, expressed as a UTC instant of those
+// same wall-clock numbers — matching how each slot below is built. This makes
+// the slot/now comparison timezone-consistent regardless of the server's tz.
+const nowInBusinessTz = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: BUSINESS_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const get = (t) => Number(parts.find((p) => p.type === t).value);
+  let hour = get('hour');
+  if (hour === 24) hour = 0; // some engines emit 24 for midnight
+  return new Date(Date.UTC(get('year'), get('month') - 1, get('day'), hour, get('minute'), get('second')));
+};
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -96,9 +113,10 @@ const generateSlots = (rules, bookedTimes, exceptions = []) => {
   // see the recruiter is busy at those times (they just can't select them).
   const booked = new Set(bookedTimes.map((d) => new Date(d).toISOString()));
   const out = [];
-  const now = new Date();
-  // Candidates cannot pick a slot starting within the next hour.
-  const earliest = new Date(now.getTime() + BOOKING_LEAD_MS);
+  const now = nowInBusinessTz();
+  // Candidates cannot pick a slot starting within the next hour (>= keeps the
+  // exactly-1-hour-away slot bookable, e.g. 11 PM when it is 10 PM).
+  const earliest = now.getTime() + BOOKING_LEAD_MS;
 
   for (let d = 0; d <= HORIZON_DAYS; d++) {   // d=0 → allow same-day booking
     const day = new Date(now);
@@ -117,7 +135,7 @@ const generateSlots = (rules, bookedTimes, exceptions = []) => {
         const mm = t % 60;
         const slot = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hh, mm, 0));
         const iso = slot.toISOString();
-        if (slot > earliest && !isBlocked(slot, exceptions)) {
+        if (slot.getTime() >= earliest && !isBlocked(slot, exceptions)) {
           out.push({ iso, day: fmtDay(slot), time: fmtTime(hh, mm), booked: booked.has(iso) });
         }
         t += SLOT_MINUTES;
@@ -199,8 +217,8 @@ const bookSlot = async (req, res, next) => {
 
     const when = new Date(scheduledTime);
     if (Number.isNaN(when.getTime())) return error(res, 'Invalid slot', 422);
-    // Enforce the 1-hour lead time server-side too.
-    if (when.getTime() < Date.now() + BOOKING_LEAD_MS) {
+    // Enforce the 1-hour lead time server-side too, in the business-tz frame.
+    if (when.getTime() < nowInBusinessTz().getTime() + BOOKING_LEAD_MS) {
       return error(res, 'Please pick a slot at least 1 hour from now.', 422);
     }
 

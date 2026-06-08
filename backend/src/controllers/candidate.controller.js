@@ -60,38 +60,33 @@ const submit = async (req, res, next) => {
   }
 };
 
-// ── Shared auto-assign helper (round-robin within the department) ──
-// Distributes candidates evenly: among the active recruiters whose department
-// matches, picks the one currently holding the FEWEST assigned candidates. Ties
-// break toward the earliest-created account, so the rotation is deterministic.
-const autoAssignRecruiter = async (jobDepartment, candidateId) => {
+// ── Shared auto-assign helper (round-robin across ALL recruiters) ──
+// Distributes every new candidate evenly across all active recruiters,
+// regardless of department: picks the recruiter currently holding the FEWEST
+// assigned candidates. Ties break toward the earliest-created account, so the
+// rotation is deterministic (A, B, A, B, …).
+const autoAssignRecruiter = async (_jobDepartment, candidateId) => {
   try {
-    const deptLabel = jobDepartment === 'CUSTOMER_SERVICE' ? 'Customer Service'
-      : jobDepartment === 'SALES' ? 'Sales'
-      : 'Interpretation';
-
+    // Primary pool: active recruiters.
     let recruiters = await prisma.user.findMany({
-      where: {
-        role: { in: ['RECRUITER', 'ADMIN'] },
-        department: { contains: deptLabel, mode: 'insensitive' },
-        isActive: true,
-      },
+      where: { role: 'RECRUITER', isActive: true },
       select: { id: true, createdAt: true, _count: { select: { assignedCandidates: true } } },
-      orderBy: { createdAt: 'asc' },
     });
 
-    // Fallback: if no recruiter matches the department, use any active recruiter.
+    // Fallback: if no recruiters exist yet, allow active admins to be assigned.
     if (recruiters.length === 0) {
       recruiters = await prisma.user.findMany({
         where: { role: { in: ['RECRUITER', 'ADMIN'] }, isActive: true },
         select: { id: true, createdAt: true, _count: { select: { assignedCandidates: true } } },
-        orderBy: { createdAt: 'asc' },
       });
     }
     if (recruiters.length === 0) return;
 
-    // Lightest load first (round-robin / load balancing).
-    recruiters.sort((a, b) => a._count.assignedCandidates - b._count.assignedCandidates);
+    // Lightest load first; tie-break by oldest account for a stable rotation.
+    recruiters.sort((a, b) =>
+      a._count.assignedCandidates - b._count.assignedCandidates
+      || new Date(a.createdAt) - new Date(b.createdAt),
+    );
     const recruiter = recruiters[0];
 
     await prisma.recruiterCandidateAssignment.upsert({
