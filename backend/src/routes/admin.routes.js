@@ -13,6 +13,9 @@ router.get('/analytics', isRecruiter, adminController.getAnalytics);
 router.get('/candidates',              isRecruiter, adminController.listCandidates);
 router.get('/candidates/:id',          isRecruiter, adminController.getCandidate);
 router.patch('/candidates/:id/status', isAdmin, adminController.updateStatus);
+// Recruiters (for their own assigned candidates) and admins can reject/hire
+router.post('/candidates/:id/reject',  isRecruiter, adminController.rejectCandidate);
+router.post('/candidates/:id/hire',    isRecruiter, adminController.hireCandidate);
 router.delete('/candidates/:id',       isAdmin, adminController.deleteCandidate);
 router.post('/candidates/:id/assign',  isAdmin, adminController.assignRecruiter);
 

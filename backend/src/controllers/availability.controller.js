@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 
 const SLOT_MINUTES = 30;          // length of each bookable slot
 const HORIZON_DAYS = 14;          // how far ahead candidates can book
+const BOOKING_LEAD_MS = 60 * 60 * 1000; // candidates can't book within 1 hour of now
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -70,14 +71,36 @@ const fmtInstant = (iso) => {
   return `${fmtDay(dt)} · ${fmtTime(dt.getUTCHours(), dt.getUTCMinutes())}`;
 };
 
-const generateSlots = (rules, bookedTimes) => {
+// Is this slot covered by a recruiter block (full day off, or a time range)?
+const minutesOfUTC = (d) => d.getUTCHours() * 60 + d.getUTCMinutes();
+const isBlocked = (slot, exceptions) => {
+  for (const ex of exceptions) {
+    const ed = new Date(ex.date);
+    const sameDay = ed.getUTCFullYear() === slot.getUTCFullYear()
+      && ed.getUTCMonth() === slot.getUTCMonth()
+      && ed.getUTCDate() === slot.getUTCDate();
+    if (!sameDay) continue;
+    if (ex.allDay) return true;
+    if (ex.startTime && ex.endTime) {
+      const [sh, sm] = ex.startTime.split(':').map(Number);
+      const [eh, em] = ex.endTime.split(':').map(Number);
+      const m = minutesOfUTC(slot);
+      if (m >= sh * 60 + sm && m < eh * 60 + em) return true;
+    }
+  }
+  return false;
+};
+
+const generateSlots = (rules, bookedTimes, exceptions = []) => {
   // Booked slots are kept in the list but marked booked:true, so candidates can
   // see the recruiter is busy at those times (they just can't select them).
   const booked = new Set(bookedTimes.map((d) => new Date(d).toISOString()));
   const out = [];
   const now = new Date();
+  // Candidates cannot pick a slot starting within the next hour.
+  const earliest = new Date(now.getTime() + BOOKING_LEAD_MS);
 
-  for (let d = 1; d <= HORIZON_DAYS; d++) {
+  for (let d = 0; d <= HORIZON_DAYS; d++) {   // d=0 → allow same-day booking
     const day = new Date(now);
     day.setUTCDate(now.getUTCDate() + d);
     const dow = day.getUTCDay();
@@ -94,7 +117,7 @@ const generateSlots = (rules, bookedTimes) => {
         const mm = t % 60;
         const slot = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hh, mm, 0));
         const iso = slot.toISOString();
-        if (slot > now) {
+        if (slot > earliest && !isBlocked(slot, exceptions)) {
           out.push({ iso, day: fmtDay(slot), time: fmtTime(hh, mm), booked: booked.has(iso) });
         }
         t += SLOT_MINUTES;
@@ -141,7 +164,8 @@ const getSlotsForCandidate = async (req, res, next) => {
 
     const rules = await prisma.recruiterAvailability.findMany({ where: { recruiterId: recruiter.id } });
     const interviews = await prisma.interview.findMany({ where: { recruiterId: recruiter.id }, select: { scheduledTime: true } });
-    const slots = generateSlots(rules, interviews.map((i) => i.scheduledTime));
+    const exceptions = await prisma.availabilityException.findMany({ where: { recruiterId: recruiter.id } });
+    const slots = generateSlots(rules, interviews.map((i) => i.scheduledTime), exceptions);
 
     return success(res, {
       alreadyBooked: false,
@@ -174,7 +198,15 @@ const bookSlot = async (req, res, next) => {
     if (!recruiter) return error(res, 'No recruiter available to book with', 503);
 
     const when = new Date(scheduledTime);
-    if (Number.isNaN(when.getTime()) || when < new Date()) return error(res, 'Invalid or past slot', 422);
+    if (Number.isNaN(when.getTime())) return error(res, 'Invalid slot', 422);
+    // Enforce the 1-hour lead time server-side too.
+    if (when.getTime() < Date.now() + BOOKING_LEAD_MS) {
+      return error(res, 'Please pick a slot at least 1 hour from now.', 422);
+    }
+
+    // Reject slots the recruiter has blocked (day off / time range).
+    const exceptions = await prisma.availabilityException.findMany({ where: { recruiterId: recruiter.id } });
+    if (isBlocked(when, exceptions)) return error(res, 'That time is no longer available. Please pick another.', 409);
 
     // Prevent double-booking the same slot
     const clash = await prisma.interview.findFirst({ where: { recruiterId: recruiter.id, scheduledTime: when } });
@@ -257,4 +289,64 @@ const myInterviews = async (req, res, next) => {
   }
 };
 
-module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews };
+// ── Availability exceptions (block a slot / mark a day off) ──────
+const listExceptions = async (req, res, next) => {
+  try {
+    const todayUtc = new Date();
+    todayUtc.setUTCHours(0, 0, 0, 0);
+    const rows = await prisma.availabilityException.findMany({
+      where: { recruiterId: req.user.id, date: { gte: todayUtc } },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+    });
+    return success(res, rows.map((r) => ({
+      ...r,
+      dayLabel: new Date(r.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }),
+    })));
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createException = async (req, res, next) => {
+  try {
+    const { date, allDay = true, startTime, endTime, reason } = req.body;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return error(res, 'A valid date (YYYY-MM-DD) is required', 422);
+    const dateUtc = new Date(`${date}T00:00:00.000Z`);
+    if (Number.isNaN(dateUtc.getTime())) return error(res, 'Invalid date', 422);
+
+    const full = allDay === true || allDay === 'true';
+    if (!full) {
+      if (!/^\d{2}:\d{2}$/.test(startTime || '') || !/^\d{2}:\d{2}$/.test(endTime || '')) {
+        return error(res, 'Start and end time must be in HH:mm format', 422);
+      }
+      if (startTime >= endTime) return error(res, 'End time must be after start time', 422);
+    }
+
+    const row = await prisma.availabilityException.create({
+      data: {
+        recruiterId: req.user.id,
+        date: dateUtc,
+        allDay: full,
+        startTime: full ? null : startTime,
+        endTime:   full ? null : endTime,
+        reason:    reason?.trim() || null,
+      },
+    });
+    return success(res, row, full ? 'Day marked as off' : 'Slot blocked', 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteException = async (req, res, next) => {
+  try {
+    const row = await prisma.availabilityException.findUnique({ where: { id: req.params.id } });
+    if (!row || row.recruiterId !== req.user.id) return error(res, 'Not found', 404);
+    await prisma.availabilityException.delete({ where: { id: req.params.id } });
+    return success(res, {}, 'Block removed');
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews, listExceptions, createException, deleteException };

@@ -7,7 +7,8 @@ export type CandidateStatus =
   | 'PROCESSING'
   | 'LEVEL1_PASSED'
   | 'REJECTED'
-  | 'AUTO_DISQUALIFIED';
+  | 'AUTO_DISQUALIFIED'
+  | 'HIRED';
 
 export type Department = 'INTERPRETATION' | 'SALES' | 'CUSTOMER_SERVICE';
 export type JobStatus  = 'DRAFT' | 'PENDING' | 'SCHEDULED' | 'PUBLISHED' | 'ARCHIVED';
@@ -194,6 +195,8 @@ export interface Candidate {
   vocarooUrl?: string | null;
   questionnaireAnswers?: Record<string, unknown> | null;
   autoDisqualifyReason?: string | null;
+  rejectionReason?: string | null;
+  rejectionDetail?: string | null;
   createdAt: string;
   job?: { id: string; title: string; department: string; departmentLabel?: string | null } | null;
   systemCheck?: SystemCheck | null;
@@ -209,6 +212,7 @@ export interface AnalyticsData {
     qualified: number;
     rejected: number;
     pending: number;
+    hired?: number;
   };
   languageBreakdown: Array<{ language: string; count: number }>;
 }
@@ -255,6 +259,7 @@ export const STATUS_LABELS: Record<CandidateStatus, string> = {
   LEVEL1_PASSED:        'Level 1 Passed',
   REJECTED:             'Rejected',
   AUTO_DISQUALIFIED:    'Auto Disqualified',
+  HIRED:                'Hired',
 };
 
 export const STATUS_COLORS: Record<CandidateStatus, string> = {
@@ -265,6 +270,7 @@ export const STATUS_COLORS: Record<CandidateStatus, string> = {
   LEVEL1_PASSED:        'bg-green-100 text-green-700',
   REJECTED:             'bg-red-100 text-red-700',
   AUTO_DISQUALIFIED:    'bg-rose-100 text-rose-700',
+  HIRED:                'bg-emerald-100 text-emerald-700',
 };
 
 export const DEPT_LABELS: Record<Department, string> = {

@@ -19,11 +19,12 @@ const getAnalytics = async (req, res, next) => {
       ? { assignedRecruiters: { some: { recruiterId: req.user.id } } }
       : {};
 
-    const [total, qualified, rejected, pending, deptBreakdown] = await Promise.all([
+    const [total, qualified, rejected, pending, hired, deptBreakdown] = await Promise.all([
       prisma.candidate.count({ where: recruiterFilter }),
       prisma.candidate.count({ where: { ...recruiterFilter, status: 'LEVEL1_PASSED' } }),
       prisma.candidate.count({ where: { ...recruiterFilter, status: 'REJECTED' } }),
       prisma.candidate.count({ where: { ...recruiterFilter, status: { in: ['PENDING', 'AUDIO_PENDING', 'PROCESSING'] } } }),
+      prisma.candidate.count({ where: { ...recruiterFilter, status: 'HIRED' } }),
       prisma.candidate.groupBy({ by: ['department'], where: { ...recruiterFilter, department: { not: null } }, _count: { id: true } }),
     ]);
 
@@ -33,7 +34,7 @@ const getAnalytics = async (req, res, next) => {
       : [];
 
     return success(res, {
-      kpi: { total, qualified, rejected, pending },
+      kpi: { total, qualified, rejected, pending, hired },
       deptBreakdown: deptBreakdown.map((d) => ({ department: d.department, count: d._count.id })),
       languageBreakdown: languageBreakdown.map((l) => ({ language: l.selectedLanguage, count: l._count.id })),
     });
@@ -114,7 +115,7 @@ const getCandidate = async (req, res, next) => {
 const updateStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
-    const validStatuses = ['PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING', 'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED'];
+    const validStatuses = ['PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING', 'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED', 'HIRED'];
     if (!validStatuses.includes(status)) return error(res, 'Invalid status', 422);
 
     const candidate = await prisma.candidate.update({
@@ -122,6 +123,47 @@ const updateStatus = async (req, res, next) => {
       data: { status },
     });
     return success(res, candidate, 'Status updated');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Reasons the recruiter can pick when rejecting after an interview.
+const REJECTION_REASONS = ['Rejected Offer', 'Failed IT', 'Failed Language Assessment', 'Other'];
+
+// Recruiters may only act on candidates assigned to them; admins on anyone.
+const ensureCandidateAccess = async (req, candidateId) => {
+  if (req.user.role !== 'RECRUITER') return true;
+  const a = await prisma.recruiterCandidateAssignment.findFirst({
+    where: { candidateId, recruiterId: req.user.id },
+  });
+  return !!a;
+};
+
+const rejectCandidate = async (req, res, next) => {
+  try {
+    const { reason, detail } = req.body;
+    if (!REJECTION_REASONS.includes(reason)) return error(res, 'A valid rejection reason is required', 422);
+    if (!(await ensureCandidateAccess(req, req.params.id))) return error(res, 'Access denied', 403);
+
+    const candidate = await prisma.candidate.update({
+      where: { id: req.params.id },
+      data: { status: 'REJECTED', rejectionReason: reason, rejectionDetail: detail?.trim() || null },
+    });
+    return success(res, candidate, 'Candidate rejected');
+  } catch (err) {
+    next(err);
+  }
+};
+
+const hireCandidate = async (req, res, next) => {
+  try {
+    if (!(await ensureCandidateAccess(req, req.params.id))) return error(res, 'Access denied', 403);
+    const candidate = await prisma.candidate.update({
+      where: { id: req.params.id },
+      data: { status: 'HIRED', rejectionReason: null, rejectionDetail: null },
+    });
+    return success(res, candidate, 'Candidate marked as hired');
   } catch (err) {
     next(err);
   }
@@ -297,4 +339,4 @@ const updateScoringConfig = async (req, res, next) => {
   }
 };
 
-module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, assignRecruiter, deleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink, getScoringConfig, updateScoringConfig };
+module.exports = { getAnalytics, listCandidates, getCandidate, updateStatus, rejectCandidate, hireCandidate, assignRecruiter, deleteCandidate, addNote, getNotes, exportCsv, generateTeamsLink, getScoringConfig, updateScoringConfig };

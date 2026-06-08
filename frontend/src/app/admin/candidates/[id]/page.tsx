@@ -10,13 +10,16 @@ import { format } from 'date-fns';
 import {
   ArrowLeft, FileText, Mic, Wifi, Monitor, Loader2, Send,
   CheckCircle, XCircle, AlertTriangle, Flag, Video, ClipboardList, CalendarClock,
+  Award, Ban, X,
 } from 'lucide-react';
 import { DEPT_LABELS, DEPT_COLORS } from '@/types';
 
 const EDITABLE_STATUSES: CandidateStatus[] = [
   'PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING',
-  'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED',
+  'LEVEL1_PASSED', 'REJECTED', 'AUTO_DISQUALIFIED', 'HIRED',
 ];
+
+const REJECTION_REASONS = ['Rejected Offer', 'Failed IT', 'Failed Language Assessment', 'Other'];
 
 // Defined at module scope (not inside the page) so they keep a stable identity
 // across renders — otherwise typing in any input remounts the tree and the
@@ -51,6 +54,11 @@ export default function CandidateProfilePage() {
   const [statusChanging, setStatusChanging] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [teamsLink, setTeamsLink] = useState<string | null>(null);
+  // Interview outcome (reject / hire)
+  const [showReject, setShowReject] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectDetail, setRejectDetail] = useState('');
+  const [outcomeSaving, setOutcomeSaving] = useState(false);
 
   const fetchCandidate = async () => {
     try {
@@ -92,6 +100,33 @@ export default function CandidateProfilePage() {
     const url = `${window.location.origin}/book/${candidateId}`;
     navigator.clipboard.writeText(url);
     toast.success('Booking link copied!');
+  };
+
+  const submitReject = async () => {
+    if (!rejectReason) { toast.error('Please select a rejection reason'); return; }
+    setOutcomeSaving(true);
+    try {
+      await api.post(`/admin/candidates/${candidateId}/reject`, { reason: rejectReason, detail: rejectDetail });
+      setShowReject(false); setRejectReason(''); setRejectDetail('');
+      await fetchCandidate();
+      toast.success('Candidate rejected');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to reject candidate');
+    } finally { setOutcomeSaving(false); }
+  };
+
+  const markHired = async () => {
+    if (!confirm('Mark this candidate as HIRED?')) return;
+    setOutcomeSaving(true);
+    try {
+      await api.post(`/admin/candidates/${candidateId}/hire`);
+      await fetchCandidate();
+      toast.success('Candidate marked as hired 🎉');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to mark as hired');
+    } finally { setOutcomeSaving(false); }
   };
 
   const handleStatusChange = async (status: string) => {
@@ -398,6 +433,43 @@ export default function CandidateProfilePage() {
         </Section>
       )}
 
+      {/* Interview Outcome — recruiter + admin (reject with reason / hire) */}
+      {currentUser && ['SUPER_ADMIN', 'ADMIN', 'RECRUITER'].includes(currentUser.role) && (
+        <Section title="Interview Outcome" icon={<Award size={18} />}>
+          {candidate.status === 'HIRED' ? (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2 text-emerald-700">
+              <Award size={18} className="text-emerald-500 shrink-0" />
+              <p className="text-sm font-semibold">This candidate has been hired.</p>
+            </div>
+          ) : candidate.status === 'REJECTED' ? (
+            <div className="space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+                <p className="font-semibold">Rejected{candidate.rejectionReason ? ` — ${candidate.rejectionReason}` : ''}</p>
+                {candidate.rejectionDetail && <p className="text-xs mt-1 text-red-600">{candidate.rejectionDetail}</p>}
+              </div>
+              <button onClick={markHired} disabled={outcomeSaving}
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                {outcomeSaving ? <Loader2 size={15} className="animate-spin" /> : <Award size={15} />} Mark as Hired instead
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">After the interview, record the outcome for this candidate.</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button onClick={markHired} disabled={outcomeSaving}
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                  {outcomeSaving ? <Loader2 size={15} className="animate-spin" /> : <Award size={15} />} Mark as Hired
+                </button>
+                <button onClick={() => setShowReject(true)} disabled={outcomeSaving}
+                  className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                  <Ban size={15} /> Reject
+                </button>
+              </div>
+            </div>
+          )}
+        </Section>
+      )}
+
       {/* Manual Status Change (Admin+) */}
       {currentUser && ['SUPER_ADMIN', 'ADMIN'].includes(currentUser.role) && (
         <Section title="Manual Status Override" icon={<Flag size={18} />}>
@@ -466,6 +538,47 @@ export default function CandidateProfilePage() {
           </button>
         </div>
       </Section>
+
+      {/* Reject modal — reason dropdown + free text */}
+      {showReject && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !outcomeSaving && setShowReject(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <Ban size={18} className="text-red-600" /> Reject Candidate
+              </h2>
+              <button onClick={() => setShowReject(false)} disabled={outcomeSaving} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Select a reason and add any details.</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Reason for rejection</label>
+                <select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                  <option value="">Select a reason…</option>
+                  {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Details / notes</label>
+                <textarea value={rejectDetail} onChange={(e) => setRejectDetail(e.target.value)} rows={3}
+                  placeholder="Type the reason…"
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setShowReject(false)} disabled={outcomeSaving}
+                className="text-sm text-gray-600 hover:text-gray-800 rounded-lg px-4 py-2">Cancel</button>
+              <button onClick={submitReject} disabled={outcomeSaving || !rejectReason}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                {outcomeSaving ? <Loader2 size={15} className="animate-spin" /> : <Ban size={15} />} Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

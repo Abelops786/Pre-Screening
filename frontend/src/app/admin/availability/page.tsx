@@ -2,17 +2,24 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
-import { Plus, Trash2, Loader2, CalendarClock } from 'lucide-react';
+import { Plus, Trash2, Loader2, CalendarClock, CalendarOff } from 'lucide-react';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 interface Slot { id: string; dayOfWeek: number; startTime: string; endTime: string; dayName?: string }
+interface Exception { id: string; date: string; allDay: boolean; startTime?: string | null; endTime?: string | null; reason?: string | null; dayLabel?: string }
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function AvailabilityPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ dayOfWeek: 1, startTime: '09:00', endTime: '17:00' });
+  // Time off / blocked slots
+  const [exceptions, setExceptions] = useState<Exception[]>([]);
+  const [exSaving, setExSaving] = useState(false);
+  const [exForm, setExForm] = useState({ date: todayStr(), allDay: true, startTime: '09:00', endTime: '10:00', reason: '' });
 
   const fetchSlots = async () => {
     setLoading(true);
@@ -22,7 +29,32 @@ export default function AvailabilityPage() {
     } catch { toast.error('Failed to load availability'); }
     finally { setLoading(false); }
   };
-  useEffect(() => { fetchSlots(); }, []);
+  const fetchExceptions = async () => {
+    try {
+      const { data } = await api.get('/availability/exceptions');
+      setExceptions(data.data);
+    } catch { /* non-blocking */ }
+  };
+  useEffect(() => { fetchSlots(); fetchExceptions(); }, []);
+
+  const addException = async () => {
+    if (!exForm.date) { toast.error('Pick a date'); return; }
+    if (!exForm.allDay && exForm.startTime >= exForm.endTime) { toast.error('End time must be after start time'); return; }
+    setExSaving(true);
+    try {
+      await api.post('/availability/exceptions', exForm);
+      toast.success(exForm.allDay ? 'Day marked as off' : 'Slot blocked');
+      setExForm((f) => ({ ...f, reason: '' }));
+      fetchExceptions();
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to add');
+    } finally { setExSaving(false); }
+  };
+
+  const removeException = async (id: string) => {
+    try { await api.delete(`/availability/exceptions/${id}`); fetchExceptions(); }
+    catch { toast.error('Failed to remove'); }
+  };
 
   const add = async () => {
     if (form.startTime >= form.endTime) { toast.error('End time must be after start time'); return; }
@@ -86,6 +118,64 @@ export default function AvailabilityPage() {
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Add
           </button>
         </div>
+      </div>
+
+      {/* Time off / block a slot */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2"><CalendarOff size={16} className="text-rose-500" /> Time off &amp; blocked slots</h2>
+        <p className="text-xs text-gray-500 mb-3">Mark a whole day as off/on leave, or block a specific time range on a date. Candidates won&apos;t be able to book those times.</p>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
+            <input type="date" min={todayStr()} value={exForm.date} onChange={(e) => setExForm((f) => ({ ...f, date: e.target.value }))}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+            <select value={exForm.allDay ? 'all' : 'range'} onChange={(e) => setExForm((f) => ({ ...f, allDay: e.target.value === 'all' }))}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="all">Whole day off / leave</option>
+              <option value="range">Block a time range</option>
+            </select>
+          </div>
+          {!exForm.allDay && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
+                <input type="time" value={exForm.startTime} onChange={(e) => setExForm((f) => ({ ...f, startTime: e.target.value }))}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
+                <input type="time" value={exForm.endTime} onChange={(e) => setExForm((f) => ({ ...f, endTime: e.target.value }))}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              </div>
+            </>
+          )}
+          <div className="flex-1 min-w-[140px]">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Reason (optional)</label>
+            <input type="text" value={exForm.reason} onChange={(e) => setExForm((f) => ({ ...f, reason: e.target.value }))} placeholder="e.g. Leave"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <button onClick={addException} disabled={exSaving}
+            className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+            {exSaving ? <Loader2 size={15} className="animate-spin" /> : <CalendarOff size={15} />} Block
+          </button>
+        </div>
+
+        {exceptions.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {exceptions.map((ex) => (
+              <span key={ex.id} className="inline-flex items-center gap-2 bg-rose-50 text-rose-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                {ex.dayLabel}
+                {ex.allDay ? ' · All day' : ` · ${ex.startTime}–${ex.endTime}`}
+                {ex.reason ? ` (${ex.reason})` : ''}
+                <button onClick={() => removeException(ex.id)} className="text-rose-400 hover:text-red-600"><Trash2 size={12} /></button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Weekly grid */}

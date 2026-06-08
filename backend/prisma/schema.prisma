@@ -25,6 +25,7 @@ enum CandidateStatus {
   LEVEL1_PASSED
   REJECTED
   AUTO_DISQUALIFIED
+  HIRED
 }
 
 enum Department {
@@ -86,6 +87,7 @@ model User {
   internalNotes      InternalNote[]
   // Stage 2 relations – pre-built
   availability       RecruiterAvailability[]
+  availabilityExceptions AvailabilityException[]
   interviews         Interview[]                    @relation("RecruiterInterviews")
   msAccessToken      String?                        @map("ms_access_token")
   msRefreshToken     String?                        @map("ms_refresh_token")
@@ -160,6 +162,8 @@ model Candidate {
   vocarooUrl           String?         @map("vocaroo_url")
   questionnaireAnswers Json?           @map("questionnaire_answers")
   autoDisqualifyReason String?         @map("auto_disqualify_reason")
+  rejectionReason      String?         @map("rejection_reason")  // Rejected Offer | Failed IT | Failed Language Assessment | Other
+  rejectionDetail      String?         @map("rejection_detail")  // free-text note from the recruiter
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
@@ -316,6 +320,23 @@ model RecruiterAvailability {
   recruiter User @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
 
   @@map("recruiter_availability")
+}
+
+// A recruiter's one-off block: an entire day off/leave, or a specific time range
+// on a given date. These override the weekly availability rules.
+model AvailabilityException {
+  id          String   @id @default(cuid())
+  recruiterId String   @map("recruiter_id")
+  date        DateTime @map("date")              // the calendar day (UTC midnight)
+  allDay      Boolean  @default(true) @map("all_day")
+  startTime   String?  @map("start_time")        // "HH:mm" when allDay = false
+  endTime     String?  @map("end_time")          // "HH:mm" when allDay = false
+  reason      String?                            // e.g. "Leave", "Personal"
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  recruiter User @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+
+  @@map("availability_exceptions")
 }
 
 model Interview {

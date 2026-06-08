@@ -60,26 +60,45 @@ const submit = async (req, res, next) => {
   }
 };
 
-// ── Shared auto-assign helper ──────────────────────────────────
+// ── Shared auto-assign helper (round-robin within the department) ──
+// Distributes candidates evenly: among the active recruiters whose department
+// matches, picks the one currently holding the FEWEST assigned candidates. Ties
+// break toward the earliest-created account, so the rotation is deterministic.
 const autoAssignRecruiter = async (jobDepartment, candidateId) => {
   try {
     const deptLabel = jobDepartment === 'CUSTOMER_SERVICE' ? 'Customer Service'
       : jobDepartment === 'SALES' ? 'Sales'
       : 'Interpretation';
-    const recruiter = await prisma.user.findFirst({
+
+    let recruiters = await prisma.user.findMany({
       where: {
         role: { in: ['RECRUITER', 'ADMIN'] },
         department: { contains: deptLabel, mode: 'insensitive' },
         isActive: true,
       },
+      select: { id: true, createdAt: true, _count: { select: { assignedCandidates: true } } },
+      orderBy: { createdAt: 'asc' },
     });
-    if (recruiter) {
-      await prisma.recruiterCandidateAssignment.upsert({
-        where: { recruiterId_candidateId: { recruiterId: recruiter.id, candidateId } },
-        create: { recruiterId: recruiter.id, candidateId },
-        update: {},
+
+    // Fallback: if no recruiter matches the department, use any active recruiter.
+    if (recruiters.length === 0) {
+      recruiters = await prisma.user.findMany({
+        where: { role: { in: ['RECRUITER', 'ADMIN'] }, isActive: true },
+        select: { id: true, createdAt: true, _count: { select: { assignedCandidates: true } } },
+        orderBy: { createdAt: 'asc' },
       });
     }
+    if (recruiters.length === 0) return;
+
+    // Lightest load first (round-robin / load balancing).
+    recruiters.sort((a, b) => a._count.assignedCandidates - b._count.assignedCandidates);
+    const recruiter = recruiters[0];
+
+    await prisma.recruiterCandidateAssignment.upsert({
+      where: { recruiterId_candidateId: { recruiterId: recruiter.id, candidateId } },
+      create: { recruiterId: recruiter.id, candidateId },
+      update: {},
+    });
   } catch (_) { /* non-blocking */ }
 };
 

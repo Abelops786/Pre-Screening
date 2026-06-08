@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { getStoredUser } from '@/lib/auth';
-import { Users, CheckCircle, XCircle, Clock, Loader2, CalendarClock, Video, ChevronRight } from 'lucide-react';
+import { Users, CheckCircle, XCircle, Clock, Loader2, CalendarClock, Video, ChevronRight, Award } from 'lucide-react';
 import { DEPT_LABELS, DEPT_COLORS } from '@/types';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -12,7 +12,7 @@ import {
 const COLORS = ['#105279', '#1f83b6', '#b098eb', '#16a34a', '#d97706', '#0891b2', '#8364d6', '#65a30d'];
 
 interface Analytics {
-  kpi: { total: number; qualified: number; rejected: number; pending: number };
+  kpi: { total: number; qualified: number; rejected: number; pending: number; hired?: number };
   deptBreakdown: { department: string; count: number }[];
   languageBreakdown: { language: string; count: number }[];
 }
@@ -48,6 +48,7 @@ export default function AdminOverviewPage() {
   const kpi = [
     { label: 'Total Applications',   value: data?.kpi.total     ?? 0, icon: Users,        color: 'text-brand-600', bg: 'bg-brand-50' },
     { label: 'Level 1 Passed',       value: data?.kpi.qualified ?? 0, icon: CheckCircle,   color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Hired',                value: data?.kpi.hired     ?? 0, icon: Award,         color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Booked Interviews',    value: intvCount.upcoming,        icon: CalendarClock, color: 'text-accent-700', bg: 'bg-accent-100' },
     { label: 'Rejected',             value: data?.kpi.rejected  ?? 0, icon: XCircle,       color: 'text-red-600',   bg: 'bg-red-50'   },
     { label: 'Pending / Processing', value: data?.kpi.pending   ?? 0, icon: Clock,         color: 'text-amber-600', bg: 'bg-amber-50' },
@@ -66,7 +67,7 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {kpi.map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
             <div className={`${bg} p-3 rounded-xl`}>
