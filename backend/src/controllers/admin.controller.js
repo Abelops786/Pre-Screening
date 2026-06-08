@@ -1,6 +1,7 @@
 const prisma = require('../config/database');
 const msService = require('../services/microsoft.service');
 const reportService = require('../services/report.service');
+const storageService = require('../services/storage.service');
 const { success, error } = require('../utils/responseHelper');
 
 const CANDIDATE_INCLUDE = {
@@ -105,6 +106,13 @@ const getCandidate = async (req, res, next) => {
     if (req.user.role === 'RECRUITER') {
       const assigned = candidate.assignedRecruiters.some((a) => a.recruiterId === req.user.id);
       if (!assigned) return error(res, 'Access denied', 403);
+    }
+
+    // Sign private R2 file URLs so they're viewable in the dashboard.
+    candidate.cvUrl          = await storageService.getViewableUrl(candidate.cvUrl);
+    candidate.certificateUrl = await storageService.getViewableUrl(candidate.certificateUrl);
+    if (candidate.audioRecording?.audioUrl) {
+      candidate.audioRecording.audioUrl = await storageService.getViewableUrl(candidate.audioRecording.audioUrl);
     }
 
     return success(res, candidate);

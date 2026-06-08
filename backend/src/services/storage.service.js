@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs   = require('fs');
-const { provider, isR2, s3Client, cloudinary, PutObjectCommand } = require('../config/storage');
+const { provider, isR2, s3Client, cloudinary, PutObjectCommand, GetObjectCommand, getSignedUrl } = require('../config/storage');
 const logger = require('../utils/logger');
 
 /**
@@ -79,4 +79,45 @@ const upload = async (buffer, originalName, mimeType, folder = 'uploads') => {
   });
 };
 
-module.exports = { upload };
+// ── Read-time signed URLs for private R2 objects ─────────────────
+// R2's S3 API endpoint isn't publicly readable, so for viewing (CV, certs,
+// audio) we mint a short-lived signed URL on demand. This keeps the bucket
+// private (candidate files aren't world-accessible) and works for files
+// already uploaded. Non-R2 / external URLs (Cloudinary, Vocaroo) pass through.
+const isOurR2Url = (url) => {
+  try {
+    const host = new URL(url).hostname;
+    const endpointHost = process.env.CLOUDFLARE_R2_ENDPOINT ? new URL(process.env.CLOUDFLARE_R2_ENDPOINT).hostname : null;
+    const publicHost   = process.env.CLOUDFLARE_R2_PUBLIC_URL ? new URL(process.env.CLOUDFLARE_R2_PUBLIC_URL).hostname : null;
+    return (endpointHost && host === endpointHost) || (publicHost && host === publicHost);
+  } catch { return false; }
+};
+
+const extractKey = (url) => {
+  const bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME;
+  try {
+    let p = decodeURIComponent(new URL(url).pathname).replace(/^\/+/, '');
+    if (bucket && p.startsWith(`${bucket}/`)) p = p.slice(bucket.length + 1); // strip path-style bucket prefix
+    return p || null;
+  } catch { return null; }
+};
+
+// Return a viewable URL for a stored file. For our private R2 objects this is
+// a signed URL valid for `expiresIn` seconds; everything else is unchanged.
+const getViewableUrl = async (storedUrl, expiresIn = 3600) => {
+  if (!storedUrl || !isR2 || !isOurR2Url(storedUrl)) return storedUrl;
+  const key = extractKey(storedUrl);
+  if (!key) return storedUrl;
+  try {
+    return await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({ Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME, Key: key }),
+      { expiresIn },
+    );
+  } catch (err) {
+    logger.warn('Could not sign R2 URL', { error: err.message });
+    return storedUrl;
+  }
+};
+
+module.exports = { upload, getViewableUrl };
