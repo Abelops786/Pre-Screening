@@ -4,9 +4,23 @@ const cloudinary = require('cloudinary').v2;
 
 const provider = (process.env.STORAGE_PROVIDER || 's3').toLowerCase();
 
+// Cloudflare R2 is S3-compatible — same SDK, just a custom endpoint, the
+// "auto" region and path-style addressing. Accept a few aliases.
+const isR2 = ['r2', 'cloudflare', 'cloudflare-r2'].includes(provider);
+
 let s3Client;
 
-if (provider === 's3') {
+if (isR2) {
+  s3Client = new S3Client({
+    region: 'auto',
+    endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+    },
+  });
+} else if (provider === 's3') {
   s3Client = new S3Client({
     region: process.env.AWS_REGION || 'us-east-1',
     credentials: {
@@ -22,4 +36,4 @@ if (provider === 's3') {
   });
 }
 
-module.exports = { provider, s3Client, cloudinary, PutObjectCommand, GetObjectCommand, getSignedUrl };
+module.exports = { provider, isR2, s3Client, cloudinary, PutObjectCommand, GetObjectCommand, getSignedUrl };

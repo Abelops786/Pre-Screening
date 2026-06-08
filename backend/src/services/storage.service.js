@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs   = require('fs');
-const { provider, s3Client, cloudinary, PutObjectCommand } = require('../config/storage');
+const { provider, isR2, s3Client, cloudinary, PutObjectCommand } = require('../config/storage');
 const logger = require('../utils/logger');
 
 /**
@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
  *
  * STORAGE_PROVIDER=local  – saves to ./uploads/ and returns a /files/ URL (dev only)
  * STORAGE_PROVIDER=s3     – AWS S3
+ * STORAGE_PROVIDER=r2     – Cloudflare R2 (S3-compatible)
  * STORAGE_PROVIDER=cloudinary – Cloudinary
  */
 const upload = async (buffer, originalName, mimeType, folder = 'uploads') => {
@@ -27,6 +28,26 @@ const upload = async (buffer, originalName, mimeType, folder = 'uploads') => {
       || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null)
       || `http://localhost:${process.env.PORT || 4000}`;
     return `${baseUrl}/files/${folder}/${basename}`;
+  }
+
+  // Cloudflare R2 (S3-compatible API)
+  if (isR2) {
+    const bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME;
+    await s3Client.send(new PutObjectCommand({
+      Bucket:      bucket,
+      Key:         filename,
+      Body:        buffer,
+      ContentType: mimeType,
+    }));
+    logger.info('File uploaded to R2', { bucket, filename });
+
+    // R2's S3 API endpoint is NOT publicly readable. Serve files via the
+    // bucket's public URL (r2.dev managed domain or a custom domain), set as
+    // CLOUDFLARE_R2_PUBLIC_URL. Fall back to the path-style endpoint URL.
+    const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL || '').replace(/\/+$/, '');
+    if (publicBase) return `${publicBase}/${filename}`;
+    const endpoint = (process.env.CLOUDFLARE_R2_ENDPOINT || '').replace(/\/+$/, '');
+    return `${endpoint}/${bucket}/${filename}`;
   }
 
   if (provider === 's3') {
