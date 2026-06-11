@@ -60,42 +60,10 @@ const submit = async (req, res, next) => {
   }
 };
 
-// ── Shared auto-assign helper (round-robin across ALL recruiters) ──
-// Distributes every new candidate evenly across all active recruiters,
-// regardless of department: picks the recruiter currently holding the FEWEST
-// assigned candidates. Ties break toward the earliest-created account, so the
-// rotation is deterministic (A, B, A, B, …).
-const autoAssignRecruiter = async (_jobDepartment, candidateId) => {
-  try {
-    // Primary pool: active recruiters.
-    let recruiters = await prisma.user.findMany({
-      where: { role: 'RECRUITER', isActive: true },
-      select: { id: true, createdAt: true, _count: { select: { assignedCandidates: true } } },
-    });
-
-    // Fallback: if no recruiters exist yet, allow active admins to be assigned.
-    if (recruiters.length === 0) {
-      recruiters = await prisma.user.findMany({
-        where: { role: { in: ['RECRUITER', 'ADMIN'] }, isActive: true },
-        select: { id: true, createdAt: true, _count: { select: { assignedCandidates: true } } },
-      });
-    }
-    if (recruiters.length === 0) return;
-
-    // Lightest load first; tie-break by oldest account for a stable rotation.
-    recruiters.sort((a, b) =>
-      a._count.assignedCandidates - b._count.assignedCandidates
-      || new Date(a.createdAt) - new Date(b.createdAt),
-    );
-    const recruiter = recruiters[0];
-
-    await prisma.recruiterCandidateAssignment.upsert({
-      where: { recruiterId_candidateId: { recruiterId: recruiter.id, candidateId } },
-      create: { recruiterId: recruiter.id, candidateId },
-      update: {},
-    });
-  } catch (_) { /* non-blocking */ }
-};
+// Recruiter assignment now happens on a round-robin basis at the moment a
+// candidate PASSES Level 1 (see recruiterAssignment.service), not at apply
+// time — so the rotation distributes evenly across candidates who actually
+// reach the booking calendar.
 
 // ── New department-based job application submit ────────────────
 const submitJobApplication = async (req, res, next) => {
@@ -216,7 +184,6 @@ const submitJobApplication = async (req, res, next) => {
       }
     }
 
-    await autoAssignRecruiter(job.department, candidate.id);
     emailService.sendConfirmation(candidate).catch(() => {});
     return success(res, { candidateId: candidate.id, autoDisqualified: false }, 'Application submitted successfully', 201);
   } catch (err) {

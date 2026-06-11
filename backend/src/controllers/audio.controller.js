@@ -5,6 +5,7 @@ const filterService  = require('../services/filter.service');
 const scoringService = require('../services/scoring.service');
 const aiService      = require('../services/aiAssessment.service');
 const emailService   = require('../services/email.service');
+const { assignRecruiterRoundRobin } = require('../services/recruiterAssignment.service');
 const { success, error } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 
@@ -119,6 +120,12 @@ const processAudio = async (req, res, next) => {
 
     const finalStatus = filterResult.qualified ? 'LEVEL1_PASSED' : 'REJECTED';
     await prisma.candidate.update({ where: { id: candidateId }, data: { status: finalStatus } });
+
+    // On passing Level 1, assign the interviewing recruiter via round-robin so
+    // the booking calendar shows that recruiter's availability.
+    if (filterResult.qualified) {
+      await assignRecruiterRoundRobin(candidateId);
+    }
 
     // Send notification email (non-blocking)
     const updatedCandidate = await prisma.candidate.findUnique({ where: { id: candidateId } });

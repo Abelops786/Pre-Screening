@@ -2,6 +2,7 @@ const prisma = require('../config/database');
 const msService = require('../services/microsoft.service');
 const reportService = require('../services/report.service');
 const storageService = require('../services/storage.service');
+const { assignRecruiterRoundRobin } = require('../services/recruiterAssignment.service');
 const { success, error } = require('../utils/responseHelper');
 
 const CANDIDATE_INCLUDE = {
@@ -132,6 +133,13 @@ const updateStatus = async (req, res, next) => {
       where: { id: req.params.id },
       data: { status },
     });
+
+    // Manually moving a candidate to LEVEL1_PASSED puts them in the same
+    // round-robin rotation as the automatic pass, so the booking calendar
+    // resolves a recruiter. No-op if they're already assigned.
+    if (status === 'LEVEL1_PASSED') {
+      await assignRecruiterRoundRobin(candidate.id);
+    }
     return success(res, candidate, 'Status updated');
   } catch (err) {
     next(err);
