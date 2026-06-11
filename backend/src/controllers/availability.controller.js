@@ -1,6 +1,7 @@
 const prisma = require('../config/database');
 const msService = require('../services/microsoft.service');
 const emailService = require('../services/email.service');
+const { assignRecruiterRoundRobin } = require('../services/recruiterAssignment.service');
 const { success, error } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 
@@ -153,7 +154,19 @@ const resolveRecruiter = async (candidate) => {
     orderBy: { assignedAt: 'asc' },
   });
   if (assignment?.recruiter?.isActive) return assignment.recruiter;
-  // Fallback: any active recruiter/admin who has availability set
+
+  // No (active) assignment yet — e.g. a candidate who passed before round-robin
+  // existed. Create one via round-robin so they join the rotation instead of
+  // every such candidate deterministically landing on the same recruiter.
+  if (!assignment) {
+    const recruiterId = await assignRecruiterRoundRobin(candidate.id);
+    if (recruiterId) {
+      const recruiter = await prisma.user.findUnique({ where: { id: recruiterId } });
+      if (recruiter?.isActive) return recruiter;
+    }
+  }
+
+  // Last resort (no eligible recruiters at all): any active recruiter with hours.
   const withAvail = await prisma.recruiterAvailability.findFirst({
     where: { recruiter: { isActive: true } },
     include: { recruiter: true },

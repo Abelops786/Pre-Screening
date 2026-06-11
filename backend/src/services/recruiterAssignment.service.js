@@ -1,24 +1,20 @@
 const prisma = require('../config/database');
 const logger = require('../utils/logger');
 
-// Statuses that mean a candidate has cleared Level 1 and therefore counts
-// toward a recruiter's round-robin load. We rotate over PASSED candidates
-// only (not every applicant), so people who actually reach the booking
-// calendar are distributed evenly: A, B, A, B, …
-const PASSED_STATUSES = ['LEVEL1_PASSED', 'HIRED'];
-
 /**
- * Assign a recruiter to a candidate on a round-robin basis, called at the
- * moment the candidate PASSES Level 1.
+ * Assign a recruiter to a candidate on a strict round-robin basis, called at
+ * the moment the candidate PASSES Level 1 (or when their booking calendar is
+ * first resolved, as a safety net for legacy passers).
  *
- * Rotation rule: pick the recruiter currently holding the FEWEST passed
- * candidates; ties break toward the earliest-created account, giving a
- * deterministic A → B → A → B rotation. Recruiters are included even if they
- * have not configured availability yet (strict rotation — by product decision).
+ * Rotation rule: assign to the recruiter who comes AFTER whoever received the
+ * most recent assignment, walking the active-recruiter list in a fixed order
+ * (oldest account first). This gives a true 1st → A, 2nd → B, 3rd → A rotation
+ * regardless of historical load, which is what the client specified. Recruiters
+ * are included even if they have not configured availability yet.
  *
- * Idempotent: if the candidate already has an assignment (e.g. this fires
- * twice, or they were assigned under older logic), the existing recruiter is
- * kept so the rotation never double-assigns or shifts.
+ * Idempotent: if the candidate already has an assignment (this fires twice, or
+ * they were assigned under older logic), the existing recruiter is kept so the
+ * rotation never double-assigns or shifts.
  *
  * Non-blocking by design — never throws into the caller's request flow.
  *
@@ -32,46 +28,45 @@ const assignRecruiterRoundRobin = async (candidateId) => {
     });
     if (existing) return existing.recruiterId;
 
-    // Primary pool: active recruiters.
+    // Eligible pool in a fixed, deterministic order (oldest account = "A").
     let recruiters = await prisma.user.findMany({
       where: { role: 'RECRUITER', isActive: true },
-      select: { id: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
     });
 
     // Fallback: if no recruiters exist yet, allow active admins to be assigned.
     if (recruiters.length === 0) {
       recruiters = await prisma.user.findMany({
         where: { role: { in: ['RECRUITER', 'ADMIN'] }, isActive: true },
-        select: { id: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
       });
     }
     if (recruiters.length === 0) return null;
 
-    // Count each recruiter's current PASSED-candidate load in one query.
-    const grouped = await prisma.recruiterCandidateAssignment.groupBy({
-      by: ['recruiterId'],
-      where: { candidate: { status: { in: PASSED_STATUSES } } },
-      _count: { _all: true },
-    });
-    const loadByRecruiter = new Map(grouped.map((g) => [g.recruiterId, g._count._all]));
+    const ids = recruiters.map((r) => r.id);
 
-    // Lightest load first; tie-break by oldest account for a stable rotation.
-    recruiters.sort((a, b) =>
-      (loadByRecruiter.get(a.id) || 0) - (loadByRecruiter.get(b.id) || 0)
-      || new Date(a.createdAt) - new Date(b.createdAt),
-    );
-    const recruiter = recruiters[0];
+    // Find who got the most recent assignment among the CURRENT eligible
+    // recruiters, then hand this candidate to the next one in the rotation.
+    const last = await prisma.recruiterCandidateAssignment.findFirst({
+      where: { recruiterId: { in: ids } },
+      orderBy: { assignedAt: 'desc' },
+      select: { recruiterId: true },
+    });
+    const lastIdx = last ? ids.indexOf(last.recruiterId) : -1;
+    const recruiterId = ids[(lastIdx + 1) % ids.length];
 
     await prisma.recruiterCandidateAssignment.upsert({
-      where: { recruiterId_candidateId: { recruiterId: recruiter.id, candidateId } },
-      create: { recruiterId: recruiter.id, candidateId },
+      where: { recruiterId_candidateId: { recruiterId, candidateId } },
+      create: { recruiterId, candidateId },
       update: {},
     });
-    return recruiter.id;
+    return recruiterId;
   } catch (err) {
     logger.warn('Round-robin recruiter assignment failed', { candidateId, error: err.message });
     return null;
   }
 };
 
-module.exports = { assignRecruiterRoundRobin, PASSED_STATUSES };
+module.exports = { assignRecruiterRoundRobin };
