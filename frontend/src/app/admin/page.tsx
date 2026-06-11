@@ -162,6 +162,9 @@ export default function AdminOverviewPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="text-right">
                     <p className={`text-xs font-medium ${iv.upcoming ? 'text-gray-800' : 'text-gray-400'}`}>{iv.scheduledLabel}</p>
+                    {iv.recruiterName && (
+                      <p className="inline-flex items-center gap-1 text-[11px] text-gray-500"><Users size={11} /> {iv.recruiterName}</p>
+                    )}
                     {iv.msTeamsLink && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-brand-600"><Video size={11} /> Teams</span>
                     )}
