@@ -6,8 +6,15 @@ const { success, error } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 
 const SLOT_MINUTES = 30;          // length of each bookable slot
+const SLOT_MS = SLOT_MINUTES * 60 * 1000;
 const HORIZON_DAYS = 14;          // how far ahead candidates can book
 const BOOKING_LEAD_MS = 60 * 60 * 1000; // candidates can't book within 1 hour of now
+// Minimum gap a recruiter must have between two interviews so they're never
+// booked back-to-back. Default 30 min; set BOOKING_BUFFER_MINUTES=0 to disable.
+const BOOKING_BUFFER_MS = (Number(process.env.BOOKING_BUFFER_MINUTES) || 30) * 60 * 1000;
+// Two interviews are "too close" when the gap between their start times is
+// under one slot + the buffer (slots are aligned to the 30-min grid).
+const TOO_CLOSE_MS = SLOT_MS + BOOKING_BUFFER_MS;
 // Recruiter hours are wall-clock in this business timezone. We compare "now"
 // in the SAME frame so "today" and the 1-hour rule are correct everywhere.
 const BUSINESS_TZ = process.env.BUSINESS_TZ || 'America/New_York';
@@ -113,6 +120,10 @@ const generateSlots = (rules, bookedTimes, exceptions = []) => {
   // Booked slots are kept in the list but marked booked:true, so candidates can
   // see the recruiter is busy at those times (they just can't select them).
   const booked = new Set(bookedTimes.map((d) => new Date(d).toISOString()));
+  const bookedMs = bookedTimes.map((d) => new Date(d).getTime());
+  // A free slot is hidden if it sits within the buffer of an existing interview,
+  // so the recruiter keeps a gap on either side and is never back-to-back.
+  const withinBuffer = (slotMs) => bookedMs.some((b) => b !== slotMs && Math.abs(slotMs - b) < TOO_CLOSE_MS);
   const out = [];
   const now = nowInBusinessTz();
   // Candidates cannot pick a slot starting within the next hour (>= keeps the
@@ -136,8 +147,12 @@ const generateSlots = (rules, bookedTimes, exceptions = []) => {
         const mm = t % 60;
         const slot = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hh, mm, 0));
         const iso = slot.toISOString();
-        if (slot.getTime() >= earliest && !isBlocked(slot, exceptions)) {
-          out.push({ iso, day: fmtDay(slot), time: fmtTime(hh, mm), booked: booked.has(iso) });
+        const isBookedSlot = booked.has(iso);
+        // Show the booked slot itself (as "Booked"); hide free slots inside the buffer.
+        const show = slot.getTime() >= earliest && !isBlocked(slot, exceptions)
+          && (isBookedSlot || !withinBuffer(slot.getTime()));
+        if (show) {
+          out.push({ iso, day: fmtDay(slot), time: fmtTime(hh, mm), booked: isBookedSlot });
         }
         t += SLOT_MINUTES;
       }
@@ -239,9 +254,19 @@ const bookSlot = async (req, res, next) => {
     const exceptions = await prisma.availabilityException.findMany({ where: { recruiterId: recruiter.id } });
     if (isBlocked(when, exceptions)) return error(res, 'That time is no longer available. Please pick another.', 409);
 
-    // Prevent double-booking the same slot
-    const clash = await prisma.interview.findFirst({ where: { recruiterId: recruiter.id, scheduledTime: when } });
-    if (clash) return error(res, 'That slot was just taken. Please pick another.', 409);
+    // Prevent double-booking, and enforce the buffer so the recruiter is never
+    // booked back-to-back (a slot within one slot + buffer of an existing one).
+    const recruiterInterviews = await prisma.interview.findMany({
+      where: { recruiterId: recruiter.id },
+      select: { scheduledTime: true },
+    });
+    const whenMs = when.getTime();
+    if (recruiterInterviews.some((i) => new Date(i.scheduledTime).getTime() === whenMs)) {
+      return error(res, 'That slot was just taken. Please pick another.', 409);
+    }
+    if (recruiterInterviews.some((i) => Math.abs(new Date(i.scheduledTime).getTime() - whenMs) < TOO_CLOSE_MS)) {
+      return error(res, 'That time is too close to another interview. Please pick another.', 409);
+    }
 
     // Create a Teams meeting if Microsoft is connected
     let teamsLink = null;
