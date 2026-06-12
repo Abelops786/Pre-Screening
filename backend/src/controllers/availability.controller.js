@@ -2,6 +2,7 @@ const prisma = require('../config/database');
 const msService = require('../services/microsoft.service');
 const emailService = require('../services/email.service');
 const { assignRecruiterRoundRobin } = require('../services/recruiterAssignment.service');
+const { reassignInterviewsForLeave } = require('../services/leaveCoverage.service');
 const { success, error } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 
@@ -388,7 +389,22 @@ const createException = async (req, res, next) => {
         reason:    reason?.trim() || null,
       },
     });
-    return success(res, row, full ? 'Day marked as off' : 'Slot blocked', 201);
+
+    // Auto-forward any already-booked interviews this leave covers to another
+    // free recruiter, so no candidate is left with an absent interviewer.
+    let coverage = { forwarded: [], unassigned: [] };
+    try {
+      coverage = await reassignInterviewsForLeave(req.user.id, row);
+    } catch (covErr) {
+      logger.warn('Leave coverage failed', { error: covErr.message });
+    }
+
+    const baseMsg = full ? 'Day marked as off' : 'Slot blocked';
+    const parts = [];
+    if (coverage.forwarded.length) parts.push(`${coverage.forwarded.length} interview(s) auto-forwarded`);
+    if (coverage.unassigned.length) parts.push(`${coverage.unassigned.length} need manual attention`);
+    const message = parts.length ? `${baseMsg} · ${parts.join(', ')}` : baseMsg;
+    return success(res, { ...row, coverage }, message, 201);
   } catch (err) {
     next(err);
   }

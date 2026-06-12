@@ -286,4 +286,38 @@ const sendSummaryReport = async (to, stats) => {
   }
 };
 
-module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview, sendInterviewBooked, sendStaffInterviewNotice, sendSummaryReport };
+// Tell admins how a recruiter's leave was covered: which interviews were
+// auto-forwarded, and which couldn't be placed and need manual handling.
+const sendLeaveCoverageSummary = async (to, { recruiterName, forwarded = [], unassigned = [] }) => {
+  const fmt = (t) => new Date(t).toLocaleString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
+  });
+  const fwdRows = forwarded.length
+    ? `<ul>${forwarded.map((f) => `<li><strong>${f.candidateName || 'Candidate'}</strong> — ${fmt(f.when)} → moved to <strong>${f.newRecruiterName}</strong></li>`).join('')}</ul>`
+    : '<p style="color:#6b7280">None.</p>';
+  const unRows = unassigned.length
+    ? `<p style="color:#991b1b"><strong>⚠ Needs manual attention — no recruiter was free:</strong></p>
+       <ul>${unassigned.map((u) => `<li><strong>${u.candidateName || 'Candidate'}</strong> — ${fmt(u.when)}</li>`).join('')}</ul>`
+    : '<p style="color:#065f46">All affected interviews were re-covered automatically. ✓</p>';
+
+  const html = base(`
+    <p><strong>${recruiterName}</strong> was marked on leave, affecting upcoming interviews.</p>
+    <p><strong>Auto-forwarded:</strong></p>
+    ${fwdRows}
+    ${unRows}
+    <p>Open the admin portal to review.</p>
+    <p>Best regards,<br>TalentScreen</p>
+  `);
+  const subject = unassigned.length
+    ? `Action needed: ${unassigned.length} interview(s) need a recruiter`
+    : `Leave coverage handled for ${recruiterName}`;
+  try {
+    await getTransporter().sendMail({ from: fromAddress(), to, subject, html });
+    logger.info('Leave coverage summary sent', { to });
+  } catch (err) {
+    logger.error('Leave coverage summary failed', { to, error: err.message });
+    throw err;
+  }
+};
+
+module.exports = { sendConfirmation, sendRejection, sendLevel1Pass, sendUnderReview, sendInterviewBooked, sendStaffInterviewNotice, sendSummaryReport, sendLeaveCoverageSummary };
