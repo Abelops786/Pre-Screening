@@ -160,9 +160,16 @@ export default function JobApplyPage() {
       const res = (e as { response?: { data?: { message?: string; error?: string; data?: { id: string; status: string } } } })?.response?.data;
       if (res?.message === 'already_applied' && res?.data) {
         const { id, status } = res.data;
-        toast.info('Resuming your application…');
-        router.push(status === 'PENDING' || status === 'SYSTEM_CHECK_FAILED'
-          ? `/jobs/${jobId}/system-check?id=${id}` : `/jobs/${jobId}/complete`);
+        if (status === 'LEVEL1_PASSED') {
+          // Already passed — send them to their interview booking, which shows
+          // their existing booking (with the Teams link) or lets them book.
+          toast.info('You have already passed — taking you to your interview booking.');
+          router.push(`/book/${id}`);
+        } else {
+          toast.info('Resuming your application…');
+          router.push(status === 'PENDING' || status === 'SYSTEM_CHECK_FAILED'
+            ? `/jobs/${jobId}/system-check?id=${id}` : `/jobs/${jobId}/complete`);
+        }
         return;
       }
       toast.error(res?.error || res?.message || 'Submission failed. Please try again.');

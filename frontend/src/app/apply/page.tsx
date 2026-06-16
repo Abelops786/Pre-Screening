@@ -73,6 +73,9 @@ export default function ApplyPage() {
         } else if (status === 'AUDIO_PENDING') {
           toast.info('Resuming your application — redirecting to audio recording…');
           router.push(`/apply/audio?id=${id}`);
+        } else if (status === 'LEVEL1_PASSED') {
+          toast.info('You have already passed — taking you to your interview booking.');
+          router.push(`/book/${id}`);
         } else {
           toast.info('Your application has already been submitted. Please check your email for updates.');
           router.push('/apply/complete');
