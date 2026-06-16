@@ -24,12 +24,17 @@ export default function BookingCalendar({ candidateId }: { candidateId: string }
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState<string | null>(null);
   const [booked, setBooked] = useState<{ label: string; teamsLink: string | null } | null>(null);
+  // true = candidate already had a booking when they arrived (vs. just booked now)
+  const [alreadyHad, setAlreadyHad] = useState(false);
 
   const load = async () => {
     try {
       const { data } = await api.get(`/availability/slots/${candidateId}`);
       setData(data.data);
-      if (data.data.alreadyBooked) setBooked({ label: data.data.scheduledLabel, teamsLink: data.data.teamsLink });
+      if (data.data.alreadyBooked) {
+        setAlreadyHad(true);
+        setBooked({ label: data.data.scheduledLabel, teamsLink: data.data.teamsLink });
+      }
     } catch {
       /* leave data null → handled below */
     } finally { setLoading(false); }
@@ -54,10 +59,22 @@ export default function BookingCalendar({ candidateId }: { candidateId: string }
 
   if (booked) return (
     <div className="text-center py-2">
-      <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-        <CheckCircle size={28} className="text-green-500" />
-      </div>
-      <h3 className="text-lg font-bold text-gray-900 mb-1">Interview Booked!</h3>
+      {alreadyHad ? (
+        <>
+          <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
+            <CalendarCheck size={28} className="text-amber-500" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-1">You&apos;ve already booked your interview</h3>
+          <p className="text-sm text-gray-500 mb-3">You already have an interview scheduled, so you can&apos;t book another one. Here are your details:</p>
+        </>
+      ) : (
+        <>
+          <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+            <CheckCircle size={28} className="text-green-500" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-1">Interview Booked!</h3>
+        </>
+      )}
       <p className="text-base font-semibold text-gray-900 mb-4">{booked.label}</p>
       {booked.teamsLink && (
         <a href={booked.teamsLink} target="_blank" rel="noreferrer"
