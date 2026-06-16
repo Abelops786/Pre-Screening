@@ -10,9 +10,56 @@ const DEPT_LABELS = {
 
 const FAILED_STATUSES = ['SYSTEM_CHECK_FAILED', 'REJECTED', 'AUTO_DISQUALIFIED'];
 
-// Compute the report figures for the window [since, now).
-const buildStats = async (since) => {
-  const periodFilter = { createdAt: { gte: since } };
+const DAY_MS = 24 * 60 * 60 * 1000;
+const fmtDate = (d) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const startOfUTCDay = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+// Resolve a report window from a preset key (or a custom from/to). Throws on
+// an invalid custom range. Returns { since, until, label }.
+const resolveRange = (range, from, to) => {
+  const now = new Date();
+  switch (range) {
+    case 'yesterday': {
+      const until = startOfUTCDay(now);
+      const since = new Date(until.getTime() - DAY_MS);
+      return { since, until, label: `Yesterday · ${fmtDate(since)}` };
+    }
+    case 'last_7_days': {
+      const since = new Date(now.getTime() - 7 * DAY_MS);
+      return { since, until: now, label: `Last 7 days · ${fmtDate(since)} – ${fmtDate(now)}` };
+    }
+    case 'last_30_days': {
+      const since = new Date(now.getTime() - 30 * DAY_MS);
+      return { since, until: now, label: `Last 30 days · ${fmtDate(since)} – ${fmtDate(now)}` };
+    }
+    case 'last_year': {
+      const since = new Date(now.getTime() - 365 * DAY_MS);
+      return { since, until: now, label: `Last year · ${fmtDate(since)} – ${fmtDate(now)}` };
+    }
+    case 'custom': {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '')) {
+        throw new Error('Please provide valid From and To dates (YYYY-MM-DD).');
+      }
+      const since = new Date(`${from}T00:00:00.000Z`);
+      const toStart = new Date(`${to}T00:00:00.000Z`);
+      if (Number.isNaN(since.getTime()) || Number.isNaN(toStart.getTime())) throw new Error('Invalid custom dates.');
+      if (since > toStart) throw new Error('The From date must be on or before the To date.');
+      const until = new Date(toStart.getTime() + DAY_MS); // include the whole 'to' day
+      return { since, until, label: `${fmtDate(since)} – ${fmtDate(toStart)}` };
+    }
+    case 'today':
+    default: {
+      const since = startOfUTCDay(now);
+      return { since, until: now, label: `Today · ${fmtDate(since)}` };
+    }
+  }
+};
+
+// Compute the report figures for the window [since, until).
+const buildStats = async (since, until = new Date(), label = '') => {
+  const createdAt = { gte: since };
+  if (until) createdAt.lt = until;
+  const periodFilter = { createdAt };
 
   const [applied, passedLevel1, hired, rejected, failed, deptGroups] = await Promise.all([
     prisma.candidate.count({ where: periodFilter }),
@@ -52,7 +99,7 @@ const buildStats = async (since) => {
     interviewsBooked: interviews.length,
     byDepartment,
     byRecruiter,
-    periodLabel: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
+    periodLabel: label || new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
   };
 };
 
@@ -69,23 +116,34 @@ const resolveRecipients = async () => {
   return admins.map((a) => a.email).filter(Boolean);
 };
 
-// Build + send the daily report. Returns a small summary for the manual endpoint.
-const runDailyReport = async () => {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const stats = await buildStats(since);
+// Send a report for an already-built stats object to all recipients.
+const sendStatsToRecipients = async (stats) => {
   const recipients = await resolveRecipients();
-
   if (recipients.length === 0) {
-    logger.warn('Daily report: no recipients configured');
+    logger.warn('Report: no recipients configured');
     return { sent: 0, stats };
   }
-
   let sent = 0;
   for (const to of recipients) {
     try { await emailService.sendSummaryReport(to, stats); sent += 1; }
-    catch (err) { logger.error('Daily report send failed', { to, error: err.message }); }
+    catch (err) { logger.error('Report send failed', { to, error: err.message }); }
   }
   return { sent, recipients: recipients.length, stats };
 };
 
-module.exports = { buildStats, runDailyReport, resolveRecipients };
+// Build + send a report for a chosen range (preset key or custom from/to).
+// Throws on an invalid custom range.
+const runReport = async ({ range, from, to } = {}) => {
+  const { since, until, label } = resolveRange(range, from, to);
+  const stats = await buildStats(since, until, label);
+  return sendStatsToRecipients(stats);
+};
+
+// Daily scheduled report — the rolling last 24 hours.
+const runDailyReport = async () => {
+  const since = new Date(Date.now() - DAY_MS);
+  const stats = await buildStats(since, new Date(), `Last 24 hours · ${fmtDate(new Date())}`);
+  return sendStatsToRecipients(stats);
+};
+
+module.exports = { buildStats, runDailyReport, runReport, resolveRecipients };

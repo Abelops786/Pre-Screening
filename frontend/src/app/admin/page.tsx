@@ -34,6 +34,9 @@ export default function AdminOverviewPage() {
   const [interviews, setInterviews] = useState<InterviewRow[]>([]);
   const [intvCount,  setIntvCount]  = useState<{ total: number; upcoming: number }>({ total: 0, upcoming: 0 });
   const [sendingReport, setSendingReport] = useState(false);
+  const [reportRange, setReportRange] = useState('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const user = getStoredUser();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -67,13 +70,19 @@ export default function AdminOverviewPage() {
   };
 
   const sendReport = async () => {
+    if (reportRange === 'custom' && (!customFrom || !customTo)) {
+      toast.error('Pick both From and To dates'); return;
+    }
     setSendingReport(true);
     try {
-      const { data } = await api.post('/admin/send-report');
+      const body = reportRange === 'custom'
+        ? { range: 'custom', from: customFrom, to: customTo }
+        : { range: reportRange };
+      const { data } = await api.post('/admin/send-report', body);
       toast.success(data?.message || 'Report sent');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg || 'Failed to send report');
+      const r = (err as { response?: { data?: { message?: string; error?: string } } })?.response?.data;
+      toast.error(r?.error || r?.message || 'Failed to send report');
     } finally { setSendingReport(false); }
   };
 
@@ -116,11 +125,31 @@ export default function AdminOverviewPage() {
           </p>
         </div>
         {isAdmin && (
-          <button onClick={sendReport} disabled={sendingReport}
-            className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
-            {sendingReport ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
-            {sendingReport ? 'Sending…' : 'Email report now'}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <select value={reportRange} onChange={(e) => setReportRange(e.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="last_7_days">Last 7 days</option>
+              <option value="last_30_days">Last 30 days</option>
+              <option value="last_year">Last year</option>
+              <option value="custom">Custom range…</option>
+            </select>
+            {reportRange === 'custom' && (
+              <>
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                <span className="text-gray-400 text-sm">–</span>
+                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              </>
+            )}
+            <button onClick={sendReport} disabled={sendingReport}
+              className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+              {sendingReport ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
+              {sendingReport ? 'Sending…' : 'Email report now'}
+            </button>
+          </div>
         )}
       </div>
 

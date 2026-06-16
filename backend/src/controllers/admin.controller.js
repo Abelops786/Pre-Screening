@@ -403,7 +403,13 @@ const updateScoringConfig = async (req, res, next) => {
 // Manually trigger the daily summary report (Admin+).
 const sendReportNow = async (req, res, next) => {
   try {
-    const result = await reportService.runDailyReport();
+    const { range, from, to } = req.body || {};
+    let result;
+    try {
+      result = await reportService.runReport({ range, from, to });
+    } catch (rangeErr) {
+      return error(res, rangeErr.message || 'Invalid date range', 422);
+    }
     if (result.sent === 0) {
       return error(res, 'No recipients configured. Add a SUPER_ADMIN user or set REPORT_RECIPIENTS.', 400);
     }
