@@ -2,7 +2,7 @@ const prisma = require('../config/database');
 const msService = require('../services/microsoft.service');
 const emailService = require('../services/email.service');
 const { assignRecruiterRoundRobin } = require('../services/recruiterAssignment.service');
-const { reassignInterviewsForLeave } = require('../services/leaveCoverage.service');
+const { reassignInterviewsForLeave, reassignInterview } = require('../services/leaveCoverage.service');
 const { success, error } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 
@@ -412,4 +412,25 @@ const deleteException = async (req, res, next) => {
   }
 };
 
-module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews, listExceptions, createException, deleteException };
+// Recruiter unavailable (e.g. emergency) — reassign one interview to a free recruiter.
+const reassignBookedInterview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const itv = await prisma.interview.findUnique({ where: { id }, select: { id: true, recruiterId: true } });
+    if (!itv) return error(res, 'Interview not found', 404);
+    // Admins can reassign any interview; a recruiter only their own.
+    if (req.user.role === 'RECRUITER' && itv.recruiterId !== req.user.id) {
+      return error(res, 'Access denied', 403);
+    }
+    const result = await reassignInterview(id);
+    if (!result.ok) return error(res, result.error || 'Could not reassign interview', 400);
+    if (!result.reassigned) {
+      return success(res, result, 'No other recruiter is free at that time. Admins have been notified to handle it manually.');
+    }
+    return success(res, result, `Interview reassigned to ${result.newRecruiterName}`);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews, listExceptions, createException, deleteException, reassignBookedInterview };

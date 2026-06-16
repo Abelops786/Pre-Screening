@@ -59,6 +59,7 @@ export default function CandidateProfilePage() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectDetail, setRejectDetail] = useState('');
   const [outcomeSaving, setOutcomeSaving] = useState(false);
+  const [reassigning, setReassigning] = useState(false);
 
   const fetchCandidate = async () => {
     try {
@@ -100,6 +101,19 @@ export default function CandidateProfilePage() {
     const url = `${window.location.origin}/book/${candidateId}`;
     navigator.clipboard.writeText(url);
     toast.success('Booking link copied!');
+  };
+
+  const reassignInterview = async (interviewId: string) => {
+    if (!confirm('Recruiter unavailable? This will move the interview to another recruiter who is free at the same time, keep the Teams link, and notify everyone.')) return;
+    setReassigning(true);
+    try {
+      const { data } = await api.post(`/availability/interviews/${interviewId}/reassign`);
+      toast.success(data.message || 'Interview reassigned');
+      await fetchCandidate();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to reassign interview';
+      toast.error(msg);
+    } finally { setReassigning(false); }
   };
 
   const submitReject = async () => {
@@ -378,12 +392,19 @@ export default function CandidateProfilePage() {
                 <span className="font-semibold text-green-700">Booked:</span>{' '}
                 {new Date(candidate.interviews[0].scheduledTime).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}
               </p>
-              {candidate.interviews[0].msTeamsLink && (
-                <a href={candidate.interviews[0].msTeamsLink} target="_blank" rel="noreferrer"
-                  className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
-                  <Video size={15} /> Join Teams Meeting
-                </a>
-              )}
+              <div className="flex items-center gap-3 flex-wrap">
+                {candidate.interviews[0].msTeamsLink && (
+                  <a href={candidate.interviews[0].msTeamsLink} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                    <Video size={15} /> Join Teams Meeting
+                  </a>
+                )}
+                <button onClick={() => reassignInterview(candidate.interviews![0].id)} disabled={reassigning}
+                  title="Reassign this interview to another free recruiter"
+                  className="inline-flex items-center gap-2 border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50 text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                  {reassigning ? <Loader2 size={15} className="animate-spin" /> : <AlertTriangle size={15} />} Recruiter unavailable — reassign
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-4 flex-wrap">

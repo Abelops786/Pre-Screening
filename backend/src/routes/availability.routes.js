@@ -11,6 +11,7 @@ router.post('/book/:candidateId',  ctrl.bookSlot);
 router.use(authenticate);
 router.get('/',             isRecruiter, ctrl.listMine);
 router.get('/my-interviews', isRecruiter, ctrl.myInterviews);
+router.post('/interviews/:id/reassign', isRecruiter, ctrl.reassignBookedInterview);
 router.post('/',            isRecruiter, ctrl.createSlotRule);
 router.delete('/:id',       isRecruiter, ctrl.deleteSlotRule);
 

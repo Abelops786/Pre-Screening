@@ -132,22 +132,89 @@ const reassignInterviewsForLeave = async (recruiterId, exception) => {
     }
   }
 
-  // Always tell admins what happened — especially anything left unassigned.
+  const onLeave = await prisma.user.findUnique({ where: { id: recruiterId }, select: { name: true } });
+  await notifyAdmins(onLeave?.name || 'A recruiter', forwarded, unassigned);
+
+  return { forwarded, unassigned };
+};
+
+// Email all active admins a coverage summary (forwarded + anything unassigned).
+const notifyAdmins = async (recruiterName, forwarded, unassigned) => {
   try {
-    const onLeave = await prisma.user.findUnique({ where: { id: recruiterId }, select: { name: true } });
     const admins = await prisma.user.findMany({
       where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] }, isActive: true },
       select: { email: true },
     });
     const recipients = [...new Set(admins.map((a) => a.email).filter(Boolean))];
     for (const to of recipients) {
-      emailService.sendLeaveCoverageSummary(to, { recruiterName: onLeave?.name || 'A recruiter', forwarded, unassigned }).catch(() => {});
+      emailService.sendLeaveCoverageSummary(to, { recruiterName, forwarded, unassigned }).catch(() => {});
     }
   } catch (err) {
-    logger.warn('Could not send leave coverage summary', { error: err.message });
+    logger.warn('Could not send coverage summary', { error: err.message });
   }
-
-  return { forwarded, unassigned };
 };
 
-module.exports = { reassignInterviewsForLeave };
+// Pick the least-loaded recruiter (excluding `excludeId`) who is genuinely free
+// at `when`. Returns the user, or null if nobody fits.
+const findCoverRecruiter = async (when, excludeId) => {
+  const whenMs = when.getTime();
+  const pool = await prisma.user.findMany({
+    where: { role: { in: ['RECRUITER', 'ADMIN'] }, isActive: true, id: { not: excludeId } },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, name: true, email: true },
+  });
+  if (pool.length === 0) return null;
+
+  const ids = pool.map((r) => r.id);
+  const [rules, exceptions, theirInterviews] = await Promise.all([
+    prisma.recruiterAvailability.findMany({ where: { recruiterId: { in: ids } } }),
+    prisma.availabilityException.findMany({ where: { recruiterId: { in: ids } } }),
+    prisma.interview.findMany({ where: { recruiterId: { in: ids } }, select: { recruiterId: true, scheduledTime: true } }),
+  ]);
+  const rulesBy = new Map(ids.map((id) => [id, rules.filter((r) => r.recruiterId === id)]));
+  const excBy = new Map(ids.map((id) => [id, exceptions.filter((e) => e.recruiterId === id)]));
+  const busyBy = new Map(ids.map((id) => [id, theirInterviews.filter((t) => t.recruiterId === id).map((t) => new Date(t.scheduledTime).getTime())]));
+
+  const candidates = [...pool].sort((a, b) => busyBy.get(a.id).length - busyBy.get(b.id).length);
+  return candidates.find((r) =>
+    isWithinRules(when, rulesBy.get(r.id))
+    && !isBlocked(when, excBy.get(r.id))
+    && !hasConflict(whenMs, busyBy.get(r.id))) || null;
+};
+
+/**
+ * Reassign a SINGLE interview to another free recruiter — used when a recruiter
+ * is suddenly unavailable (e.g. an emergency on the day). Moves the interview +
+ * candidate assignment, keeps the Teams link, and emails the new recruiter,
+ * the candidate, and admins. If nobody is free, admins are asked to handle it.
+ *
+ * @returns {Promise<{ok:boolean, reassigned?:boolean, newRecruiterName?:string, error?:string}>}
+ */
+const reassignInterview = async (interviewId) => {
+  const itv = await prisma.interview.findUnique({ where: { id: interviewId }, include: { candidate: true } });
+  if (!itv) return { ok: false, error: 'Interview not found' };
+
+  const when = new Date(itv.scheduledTime);
+  const former = await prisma.user.findUnique({ where: { id: itv.recruiterId }, select: { name: true } });
+  const candidateName = itv.candidate?.fullName;
+
+  const pick = await findCoverRecruiter(when, itv.recruiterId);
+  if (!pick) {
+    await notifyAdmins(former?.name || 'A recruiter', [], [{ candidateName, when: itv.scheduledTime }]);
+    return { ok: true, reassigned: false };
+  }
+
+  await prisma.interview.update({ where: { id: itv.id }, data: { recruiterId: pick.id } });
+  await prisma.recruiterCandidateAssignment.updateMany({
+    where: { candidateId: itv.candidateId, recruiterId: itv.recruiterId },
+    data: { recruiterId: pick.id },
+  });
+
+  if (pick.email) emailService.sendStaffInterviewNotice(pick.email, pick.name, itv.candidate, itv.scheduledTime, itv.msTeamsLink).catch(() => {});
+  if (itv.candidate?.email) emailService.sendInterviewBooked(itv.candidate, itv.scheduledTime, itv.msTeamsLink).catch(() => {});
+  await notifyAdmins(former?.name || 'A recruiter', [{ candidateName, when: itv.scheduledTime, newRecruiterName: pick.name }], []);
+
+  return { ok: true, reassigned: true, newRecruiterName: pick.name };
+};
+
+module.exports = { reassignInterviewsForLeave, reassignInterview };
