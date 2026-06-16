@@ -62,7 +62,7 @@ const listCandidates = async (req, res, next) => {
         { email:    { contains: search, mode: 'insensitive' } },
       ];
     }
-    if (status)     where.status = status;
+    if (status)     where.status = String(status).includes(',') ? { in: String(status).split(',') } : status;
     if (language)   where.selectedLanguage = language;
     if (department) where.department = department;
 

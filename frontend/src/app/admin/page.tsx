@@ -104,12 +104,12 @@ export default function AdminOverviewPage() {
   );
 
   const kpi = [
-    { label: 'Total Applications',   value: data?.kpi.total     ?? 0, icon: Users,        color: 'text-brand-600', bg: 'bg-brand-50' },
-    { label: 'Level 1 Passed',       value: data?.kpi.qualified ?? 0, icon: CheckCircle,   color: 'text-green-600', bg: 'bg-green-50' },
-    { label: 'Hired',                value: data?.kpi.hired     ?? 0, icon: Award,         color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Booked Interviews',    value: intvCount.upcoming,        icon: CalendarClock, color: 'text-accent-700', bg: 'bg-accent-100' },
-    { label: 'Rejected',             value: data?.kpi.rejected  ?? 0, icon: XCircle,       color: 'text-red-600',   bg: 'bg-red-50'   },
-    { label: 'Pending / Processing', value: data?.kpi.pending   ?? 0, icon: Clock,         color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Total Applications',   value: data?.kpi.total     ?? 0, icon: Users,        color: 'text-brand-600',   bg: 'bg-brand-50',    href: '/admin/candidates' },
+    { label: 'Level 1 Passed',       value: data?.kpi.qualified ?? 0, icon: CheckCircle,   color: 'text-green-600',   bg: 'bg-green-50',    href: '/admin/candidates?status=LEVEL1_PASSED' },
+    { label: 'Hired',                value: data?.kpi.hired     ?? 0, icon: Award,         color: 'text-emerald-600', bg: 'bg-emerald-50',  href: '/admin/candidates?status=HIRED' },
+    { label: 'Booked Interviews',    value: intvCount.upcoming,        icon: CalendarClock, color: 'text-accent-700',  bg: 'bg-accent-100',  scrollTo: 'booked-interviews' },
+    { label: 'Rejected',             value: data?.kpi.rejected  ?? 0, icon: XCircle,       color: 'text-red-600',     bg: 'bg-red-50',      href: '/admin/candidates?status=REJECTED' },
+    { label: 'Pending / Processing', value: data?.kpi.pending   ?? 0, icon: Clock,         color: 'text-amber-600',   bg: 'bg-amber-50',    href: '/admin/candidates?status=PENDING,AUDIO_PENDING,PROCESSING' },
   ];
 
   const hasDeptData = (data?.deptBreakdown?.length ?? 0) > 0;
@@ -153,23 +153,36 @@ export default function AdminOverviewPage() {
         )}
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {kpi.map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
-            <div className={`${bg} p-3 rounded-xl`}>
-              <Icon size={22} className={color} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{value.toLocaleString()}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-            </div>
-          </div>
-        ))}
+      {/* KPI Cards — each drills into the relevant list */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {kpi.map(({ label, value, icon: Icon, color, bg, href, scrollTo }) => {
+          const inner = (
+            <>
+              <div className={`${bg} p-3 rounded-xl shrink-0`}>
+                <Icon size={22} className={color} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xl font-bold text-gray-900 leading-none">{value.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 mt-1.5 truncate">{label}</p>
+              </div>
+              <ChevronRight size={18} className="ml-auto text-gray-300 group-hover:text-brand-500 transition-colors" />
+            </>
+          );
+          const cls = 'group bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-brand-200 transition-all cursor-pointer text-left w-full';
+          return scrollTo ? (
+            <button key={label} type="button" onClick={() => document.getElementById(scrollTo)?.scrollIntoView({ behavior: 'smooth' })} className={cls}>
+              {inner}
+            </button>
+          ) : (
+            <Link key={label} href={href!} className={cls}>
+              {inner}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Booked interviews */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div id="booked-interviews" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 scroll-mt-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
             <CalendarClock size={18} className="text-accent-700" />

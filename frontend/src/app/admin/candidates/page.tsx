@@ -45,6 +45,12 @@ export default function CandidatesPage() {
     }
   }, [page, search, status, dept]);
 
+  // Apply a status filter passed via the URL (e.g. from a dashboard KPI card).
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('status');
+    if (s) setStatus(s);
+  }, []);
+
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
   useEffect(() => { setPage(1); }, [search, status, dept]);
 
@@ -102,6 +108,7 @@ export default function CandidatesPage() {
         <select value={status} onChange={(e) => setStatus(e.target.value)}
           className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
           <option value="">All Statuses</option>
+          {status.includes(',') && <option value={status}>Pending / Processing</option>}
           {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
         </select>
       </div>
