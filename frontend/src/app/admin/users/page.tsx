@@ -6,7 +6,7 @@ import { getStoredUser } from '@/lib/auth';
 import { toast } from 'react-toastify';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { UserPlus, Trash2, Loader2, CheckCircle, XCircle, KeyRound, Eye, EyeOff, X } from 'lucide-react';
+import { UserPlus, Trash2, Loader2, CheckCircle, XCircle, KeyRound, Eye, EyeOff, X, Pencil } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -34,6 +34,13 @@ export default function UsersPage() {
   const [confirmPw,  setConfirmPw]  = useState('');
   const [showPw,     setShowPw]     = useState(false);
   const [resetting,  setResetting]  = useState(false);
+  // Edit-user modal state
+  const [editUser,   setEditUser]   = useState<User | null>(null);
+  const [editName,   setEditName]   = useState('');
+  const [editRole,   setEditRole]   = useState<'ADMIN' | 'RECRUITER'>('RECRUITER');
+  const [editDept,   setEditDept]   = useState('');
+  const [editActive, setEditActive] = useState(true);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -94,6 +101,36 @@ export default function UsersPage() {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to reset password';
       toast.error(msg);
     } finally { setResetting(false); }
+  };
+
+  const openEdit = (user: User) => {
+    setEditUser(user);
+    setEditName(user.name);
+    setEditRole(user.role === 'ADMIN' ? 'ADMIN' : 'RECRUITER');
+    setEditDept(user.department ?? '');
+    setEditActive(user.isActive ?? true);
+  };
+
+  const submitEdit = async () => {
+    if (!editUser) return;
+    if (editName.trim().length < 2) { toast.error('Name must be at least 2 characters'); return; }
+    setSavingEdit(true);
+    try {
+      const payload: Record<string, unknown> = {
+        name: editName.trim(),
+        department: editDept.trim() || null,
+        isActive: editActive,
+      };
+      // A SUPER_ADMIN's role can't be changed from this screen.
+      if (editUser.role !== 'SUPER_ADMIN') payload.role = editRole;
+      await api.patch(`/auth/users/${editUser.id}`, payload);
+      toast.success(`${editName.trim()} updated`);
+      setEditUser(null);
+      await fetchUsers();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to update user';
+      toast.error(msg);
+    } finally { setSavingEdit(false); }
   };
 
   const deleteUser = async (id: string) => {
@@ -208,6 +245,13 @@ export default function UsersPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <button
+                        onClick={() => openEdit(u)}
+                        title="Edit user"
+                        className="text-gray-400 hover:text-brand-600 transition-colors"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
                         onClick={() => openReset(u)}
                         title="Reset password"
                         className="text-gray-400 hover:text-brand-600 transition-colors"
@@ -232,6 +276,61 @@ export default function UsersPage() {
           </table>
         </div>
       </div>
+
+      {/* Edit user modal */}
+      {editUser && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !savingEdit && setEditUser(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <Pencil size={18} className="text-brand-600" /> Edit User
+              </h2>
+              <button onClick={() => setEditUser(null)} disabled={savingEdit} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">{editUser.email}</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Full name</label>
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} className={inputClass} placeholder="Full name" />
+              </div>
+              {editUser.role === 'SUPER_ADMIN' ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
+                  <input value="Super Admin" disabled className={`${inputClass} bg-gray-50 text-gray-400`} />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
+                  <select value={editRole} onChange={(e) => setEditRole(e.target.value as 'ADMIN' | 'RECRUITER')} className={inputClass}>
+                    <option value="RECRUITER">Recruiter</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+                <input value={editDept} onChange={(e) => setEditDept(e.target.value)} className={inputClass} placeholder="e.g. Recruitment, Interpretation" />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="rounded border-gray-300" />
+                Active
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setEditUser(null)} disabled={savingEdit}
+                className="text-sm text-gray-600 hover:text-gray-800 rounded-lg px-4 py-2">Cancel</button>
+              <button onClick={submitEdit} disabled={savingEdit}
+                className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                {savingEdit ? <Loader2 size={15} className="animate-spin" /> : <Pencil size={15} />} Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reset password modal */}
       {resetUser && (
