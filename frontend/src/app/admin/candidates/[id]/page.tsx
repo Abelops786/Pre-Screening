@@ -286,9 +286,6 @@ export default function CandidateProfilePage() {
             <Row label="IP Address" value={sc.ipAddress
               ? <span className="font-mono text-sm">{sc.ipAddress}{sc.ipCountry ? ` · ${sc.ipCountry}` : ''}</span>
               : <span className="text-gray-400">Not captured</span>} />
-            <Row label="VPN / Proxy" value={sc.vpnDetected
-              ? <span className="flex items-center gap-1 text-red-600 font-semibold"><Flag size={14} /> Detected{sc.vpnReason ? ` — ${sc.vpnReason}` : ''}</span>
-              : <span className="text-green-600">None detected</span>} />
             <Row label="Result" value={sc.passed ? <span className="text-green-600 font-semibold">Passed</span> : <span className="text-red-600 font-semibold">Failed</span>} />
           </div>
         ) : <p className="text-sm text-gray-400">No system check data</p>}
