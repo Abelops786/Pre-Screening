@@ -214,12 +214,20 @@ const sendSummaryReport = async (to, stats) => {
       <td style="padding:9px 14px;border-bottom:1px solid #eef2f7;color:#0f172a;font-size:14px;font-weight:700;text-align:right;">${value}</td>
     </tr>`;
 
-  const deptRows = (stats.byDepartment || []).length
-    ? stats.byDepartment.map((d) => row(d.label, d.count)).join('')
-    : `<tr><td colspan="2" style="padding:12px 14px;color:#9ca3af;font-size:13px;text-align:center;">No new applications in this period.</td></tr>`;
+  const positions = stats.byPosition || stats.byDepartment || [];
+  const deptRows = positions.length
+    ? positions.map((d) => row(d.label, d.count)).join('')
+    : `<tr><td colspan="2" style="padding:12px 14px;color:#9ca3af;font-size:13px;text-align:center;">No positions found.</td></tr>`;
 
+  // "5 interviews (1 Interpretation, 3 Customer Service, 1 Sales)"
+  const recruiterValue = (r) => {
+    const base = `${r.count} interview${r.count === 1 ? '' : 's'}`;
+    if (!r.breakdown || !r.breakdown.length) return base;
+    const parts = r.breakdown.map((b) => `${b.count} ${b.label}`).join(', ');
+    return `${base} <span style="color:#94a3b8;font-weight:400;">(${parts})</span>`;
+  };
   const recruiterRows = (stats.byRecruiter || []).length
-    ? stats.byRecruiter.map((r) => row(r.name, `${r.count} interview${r.count === 1 ? '' : 's'}`)).join('')
+    ? stats.byRecruiter.map((r) => row(r.name, recruiterValue(r))).join('')
     : `<tr><td colspan="2" style="padding:12px 14px;color:#9ca3af;font-size:13px;text-align:center;">No interviews booked in this period.</td></tr>`;
 
   const html = `

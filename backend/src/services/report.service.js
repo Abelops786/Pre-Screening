@@ -61,33 +61,47 @@ const buildStats = async (since, until = new Date(), label = '') => {
   if (until) createdAt.lt = until;
   const periodFilter = { createdAt };
 
-  const [applied, passedLevel1, hired, rejected, failed, deptGroups] = await Promise.all([
+  const [applied, passedLevel1, hired, rejected, failed, jobGroups, jobs] = await Promise.all([
     prisma.candidate.count({ where: periodFilter }),
     prisma.candidate.count({ where: { ...periodFilter, status: { in: ['LEVEL1_PASSED', 'HIRED'] } } }),
     prisma.candidate.count({ where: { ...periodFilter, status: 'HIRED' } }),
     prisma.candidate.count({ where: { ...periodFilter, status: 'REJECTED' } }),
     prisma.candidate.count({ where: { ...periodFilter, status: { in: FAILED_STATUSES } } }),
-    prisma.candidate.groupBy({ by: ['department'], where: { ...periodFilter, department: { not: null } }, _count: { id: true } }),
+    prisma.candidate.groupBy({ by: ['jobId'], where: { ...periodFilter, jobId: { not: null } }, _count: { id: true } }),
+    prisma.job.findMany({ select: { id: true, title: true } }),
   ]);
 
-  const byDepartment = deptGroups
-    .map((g) => ({ label: DEPT_LABELS[g.department] || g.department, count: g._count.id }))
-    .sort((a, b) => b.count - a.count);
+  // Applications per position — every job, including those with 0 applications.
+  const jobCount = new Map(jobGroups.map((g) => [g.jobId, g._count.id]));
+  const byPosition = jobs
+    .map((j) => ({ label: j.title, count: jobCount.get(j.id) || 0 }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
-  // Interviews booked in the period, grouped per recruiter (include 0 for active recruiters).
+  // Interviews booked in the period, per recruiter, broken down by department.
   const interviews = await prisma.interview.findMany({
     where: periodFilter,
-    select: { recruiterId: true },
+    select: { recruiterId: true, candidate: { select: { department: true } } },
   });
-  const counts = {};
-  for (const iv of interviews) counts[iv.recruiterId] = (counts[iv.recruiterId] || 0) + 1;
+  const byRec = {}; // recruiterId -> { total, depts: { [dept]: count } }
+  for (const iv of interviews) {
+    const rec = (byRec[iv.recruiterId] ||= { total: 0, depts: {} });
+    rec.total += 1;
+    const d = iv.candidate?.department || 'OTHER';
+    rec.depts[d] = (rec.depts[d] || 0) + 1;
+  }
 
   const recruiters = await prisma.user.findMany({
     where: { role: { in: ['RECRUITER', 'ADMIN'] }, isActive: true },
     select: { id: true, name: true },
   });
   const byRecruiter = recruiters
-    .map((r) => ({ name: r.name, count: counts[r.id] || 0 }))
+    .map((r) => {
+      const info = byRec[r.id] || { total: 0, depts: {} };
+      const breakdown = Object.entries(info.depts)
+        .map(([d, c]) => ({ label: DEPT_LABELS[d] || (d === 'OTHER' ? 'Other' : d), count: c }))
+        .sort((a, b) => b.count - a.count);
+      return { name: r.name, count: info.total, breakdown };
+    })
     .sort((a, b) => b.count - a.count);
 
   return {
@@ -97,7 +111,7 @@ const buildStats = async (since, until = new Date(), label = '') => {
     hired,
     rejected,
     interviewsBooked: interviews.length,
-    byDepartment,
+    byPosition,
     byRecruiter,
     periodLabel: label || new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
   };
