@@ -162,24 +162,15 @@ const generateSlots = (rules, bookedTimes, exceptions = []) => {
   return out.sort((a, b) => a.iso.localeCompare(b.iso));
 };
 
-// Resolve the recruiter who will interview a given candidate
+// Resolve the recruiter who will interview a given candidate. Routes through
+// the round-robin, which keeps the current assignment if that recruiter is
+// still bookable (active + has availability) and otherwise re-routes the
+// candidate to an eligible recruiter — so the calendar is never empty.
 const resolveRecruiter = async (candidate) => {
-  const assignment = await prisma.recruiterCandidateAssignment.findFirst({
-    where: { candidateId: candidate.id },
-    include: { recruiter: true },
-    orderBy: { assignedAt: 'asc' },
-  });
-  if (assignment?.recruiter?.isActive) return assignment.recruiter;
-
-  // No (active) assignment yet — e.g. a candidate who passed before round-robin
-  // existed. Create one via round-robin so they join the rotation instead of
-  // every such candidate deterministically landing on the same recruiter.
-  if (!assignment) {
-    const recruiterId = await assignRecruiterRoundRobin(candidate.id);
-    if (recruiterId) {
-      const recruiter = await prisma.user.findUnique({ where: { id: recruiterId } });
-      if (recruiter?.isActive) return recruiter;
-    }
+  const recruiterId = await assignRecruiterRoundRobin(candidate.id);
+  if (recruiterId) {
+    const recruiter = await prisma.user.findUnique({ where: { id: recruiterId } });
+    if (recruiter?.isActive) return recruiter;
   }
 
   // Last resort (no eligible recruiters at all): any active recruiter with hours.
