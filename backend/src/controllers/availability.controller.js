@@ -412,16 +412,13 @@ const deleteException = async (req, res, next) => {
   }
 };
 
-// Recruiter unavailable (e.g. emergency) — reassign one interview to a free recruiter.
+// Recruiter unavailable (e.g. emergency) — reassign one interview to a free
+// recruiter. Super Admin only (enforced by route middleware).
 const reassignBookedInterview = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const itv = await prisma.interview.findUnique({ where: { id }, select: { id: true, recruiterId: true } });
+    const itv = await prisma.interview.findUnique({ where: { id }, select: { id: true } });
     if (!itv) return error(res, 'Interview not found', 404);
-    // Admins can reassign any interview; a recruiter only their own.
-    if (req.user.role === 'RECRUITER' && itv.recruiterId !== req.user.id) {
-      return error(res, 'Access denied', 403);
-    }
     const result = await reassignInterview(id);
     if (!result.ok) return error(res, result.error || 'Could not reassign interview', 400);
     if (!result.reassigned) {

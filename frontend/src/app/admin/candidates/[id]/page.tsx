@@ -405,11 +405,13 @@ export default function CandidateProfilePage() {
                     <Video size={15} /> Join Teams Meeting
                   </a>
                 )}
-                <button onClick={() => reassignInterview(candidate.interviews![0].id)} disabled={reassigning}
-                  title="Reassign this interview to another free recruiter"
-                  className="inline-flex items-center gap-2 border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50 text-sm font-medium rounded-lg px-4 py-2 transition-colors">
-                  {reassigning ? <Loader2 size={15} className="animate-spin" /> : <AlertTriangle size={15} />} Recruiter unavailable — reassign
-                </button>
+                {currentUser?.role === 'SUPER_ADMIN' && (
+                  <button onClick={() => reassignInterview(candidate.interviews![0].id)} disabled={reassigning}
+                    title="Reassign this interview to another free recruiter"
+                    className="inline-flex items-center gap-2 border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50 text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                    {reassigning ? <Loader2 size={15} className="animate-spin" /> : <AlertTriangle size={15} />} Recruiter unavailable — reassign
+                  </button>
+                )}
               </div>
             </div>
           ) : (
