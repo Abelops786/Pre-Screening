@@ -2,7 +2,7 @@ const prisma = require('../config/database');
 const msService = require('../services/microsoft.service');
 const emailService = require('../services/email.service');
 const { assignRecruiterRoundRobin } = require('../services/recruiterAssignment.service');
-const { reassignInterviewsForLeave, reassignInterview } = require('../services/leaveCoverage.service');
+const { reassignInterviewsForLeave, reassignInterview, reassignInterviewToRecruiter } = require('../services/leaveCoverage.service');
 const { success, error } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 
@@ -412,15 +412,25 @@ const deleteException = async (req, res, next) => {
   }
 };
 
-// Recruiter unavailable (e.g. emergency) — reassign one interview to a free
-// recruiter. Super Admin only (enforced by route middleware).
+// Reassign one interview. Two modes (route allows ADMIN+):
+//   • Manual — body.recruiterId set: move to that specific recruiter (ADMIN+).
+//   • Auto   — no recruiterId: find the first free recruiter (SUPER_ADMIN only).
 const reassignBookedInterview = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { recruiterId } = req.body || {};
     const itv = await prisma.interview.findUnique({ where: { id }, select: { id: true } });
     if (!itv) return error(res, 'Interview not found', 404);
-    const result = await reassignInterview(id);
-    if (!result.ok) return error(res, result.error || 'Could not reassign interview', 400);
+
+    let result;
+    if (recruiterId) {
+      result = await reassignInterviewToRecruiter(id, recruiterId);
+    } else {
+      if (req.user.role !== 'SUPER_ADMIN') return error(res, 'Only a Super Admin can auto-reassign. Please pick a recruiter.', 403);
+      result = await reassignInterview(id);
+    }
+
+    if (!result.ok) return error(res, result.error || 'Could not reassign interview', 422);
     if (!result.reassigned) {
       return success(res, result, 'No other recruiter is free at that time. Admins have been notified to handle it manually.');
     }
@@ -430,4 +440,18 @@ const reassignBookedInterview = async (req, res, next) => {
   }
 };
 
-module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews, listExceptions, createException, deleteException, reassignBookedInterview };
+// Active recruiters for the manual-reassign dropdown (ADMIN+).
+const listRecruiters = async (req, res, next) => {
+  try {
+    const recruiters = await prisma.user.findMany({
+      where: { role: 'RECRUITER', isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return success(res, recruiters);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews, listExceptions, createException, deleteException, reassignBookedInterview, listRecruiters };

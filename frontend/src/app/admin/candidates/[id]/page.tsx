@@ -60,6 +60,9 @@ export default function CandidateProfilePage() {
   const [rejectDetail, setRejectDetail] = useState('');
   const [outcomeSaving, setOutcomeSaving] = useState(false);
   const [reassigning, setReassigning] = useState(false);
+  const [recruiters, setRecruiters] = useState<{ id: string; name: string }[]>([]);
+  const [selectedRecruiter, setSelectedRecruiter] = useState('');
+  const canManageInterview = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'ADMIN';
 
   const fetchCandidate = async () => {
     try {
@@ -76,6 +79,11 @@ export default function CandidateProfilePage() {
   useEffect(() => {
     fetchCandidate();
   }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!canManageInterview) return;
+    api.get('/availability/recruiters').then((r) => setRecruiters(r.data.data)).catch(() => {});
+  }, [canManageInterview]);
 
   useEffect(() => {
     if (candidate?.interviews?.[0]?.msTeamsLink) {
@@ -103,12 +111,16 @@ export default function CandidateProfilePage() {
     toast.success('Booking link copied!');
   };
 
-  const reassignInterview = async (interviewId: string) => {
-    if (!confirm('Recruiter unavailable? This will move the interview to another recruiter who is free at the same time, keep the Teams link, and notify everyone.')) return;
+  const reassignInterview = async (interviewId: string, recruiterId?: string) => {
+    const prompt = recruiterId
+      ? 'Reassign this interview to the selected recruiter? The Teams link stays the same and everyone will be notified.'
+      : 'Recruiter unavailable? This will move the interview to another recruiter who is free at the same time, keep the Teams link, and notify everyone.';
+    if (!confirm(prompt)) return;
     setReassigning(true);
     try {
-      const { data } = await api.post(`/availability/interviews/${interviewId}/reassign`);
+      const { data } = await api.post(`/availability/interviews/${interviewId}/reassign`, recruiterId ? { recruiterId } : {});
       toast.success(data.message || 'Interview reassigned');
+      setSelectedRecruiter('');
       // A recruiter who reassigns their own candidate loses access to it, so
       // refreshing in place would 403. Send them back to the list instead.
       if (currentUser?.role === 'RECRUITER') {
@@ -407,10 +419,23 @@ export default function CandidateProfilePage() {
                 )}
                 {currentUser?.role === 'SUPER_ADMIN' && (
                   <button onClick={() => reassignInterview(candidate.interviews![0].id)} disabled={reassigning}
-                    title="Reassign this interview to another free recruiter"
+                    title="Auto-reassign to a recruiter who is free at the same time"
                     className="inline-flex items-center gap-2 border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50 text-sm font-medium rounded-lg px-4 py-2 transition-colors">
-                    {reassigning ? <Loader2 size={15} className="animate-spin" /> : <AlertTriangle size={15} />} Recruiter unavailable — reassign
+                    {reassigning ? <Loader2 size={15} className="animate-spin" /> : <AlertTriangle size={15} />} Recruiter unavailable — auto reassign
                   </button>
+                )}
+                {canManageInterview && (
+                  <div className="flex items-center gap-2">
+                    <select value={selectedRecruiter} onChange={(e) => setSelectedRecruiter(e.target.value)} disabled={reassigning}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                      <option value="">Reassign to…</option>
+                      {recruiters.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                    <button onClick={() => reassignInterview(candidate.interviews![0].id, selectedRecruiter)} disabled={reassigning || !selectedRecruiter}
+                      className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                      {reassigning ? <Loader2 size={15} className="animate-spin" /> : null} Reassign
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

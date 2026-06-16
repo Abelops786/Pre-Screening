@@ -217,4 +217,46 @@ const reassignInterview = async (interviewId) => {
   return { ok: true, reassigned: true, newRecruiterName: pick.name };
 };
 
-module.exports = { reassignInterviewsForLeave, reassignInterview };
+/**
+ * Manually reassign a single interview to a SPECIFIC recruiter chosen by an
+ * admin. Validates the target is an active recruiter and isn't already booked
+ * at that exact time, then moves the interview + assignment, keeps the Teams
+ * link, and emails the new recruiter, the candidate, and admins.
+ *
+ * @returns {Promise<{ok:boolean, reassigned?:boolean, newRecruiterName?:string, error?:string}>}
+ */
+const reassignInterviewToRecruiter = async (interviewId, recruiterId) => {
+  const itv = await prisma.interview.findUnique({ where: { id: interviewId }, include: { candidate: true } });
+  if (!itv) return { ok: false, error: 'Interview not found' };
+  if (recruiterId === itv.recruiterId) return { ok: false, error: 'The interview is already assigned to that recruiter' };
+
+  const target = await prisma.user.findUnique({
+    where: { id: recruiterId },
+    select: { id: true, name: true, email: true, isActive: true, role: true },
+  });
+  if (!target || !target.isActive || !['RECRUITER', 'ADMIN', 'SUPER_ADMIN'].includes(target.role)) {
+    return { ok: false, error: 'Please choose an active recruiter' };
+  }
+
+  // Don't double-book the chosen recruiter at the same time.
+  const clash = await prisma.interview.findFirst({
+    where: { recruiterId, scheduledTime: itv.scheduledTime, id: { not: itv.id } },
+  });
+  if (clash) return { ok: false, error: 'That recruiter already has an interview at this time' };
+
+  const former = await prisma.user.findUnique({ where: { id: itv.recruiterId }, select: { name: true } });
+
+  await prisma.interview.update({ where: { id: itv.id }, data: { recruiterId } });
+  await prisma.recruiterCandidateAssignment.updateMany({
+    where: { candidateId: itv.candidateId, recruiterId: itv.recruiterId },
+    data: { recruiterId },
+  });
+
+  if (target.email) emailService.sendStaffInterviewNotice(target.email, target.name, itv.candidate, itv.scheduledTime, itv.msTeamsLink).catch(() => {});
+  if (itv.candidate?.email) emailService.sendInterviewBooked(itv.candidate, itv.scheduledTime, itv.msTeamsLink).catch(() => {});
+  await notifyAdmins(former?.name || 'A recruiter', [{ candidateName: itv.candidate?.fullName, when: itv.scheduledTime, newRecruiterName: target.name }], []);
+
+  return { ok: true, reassigned: true, newRecruiterName: target.name };
+};
+
+module.exports = { reassignInterviewsForLeave, reassignInterview, reassignInterviewToRecruiter };
