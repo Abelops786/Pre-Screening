@@ -109,7 +109,13 @@ export default function CandidateProfilePage() {
     try {
       const { data } = await api.post(`/availability/interviews/${interviewId}/reassign`);
       toast.success(data.message || 'Interview reassigned');
-      await fetchCandidate();
+      // A recruiter who reassigns their own candidate loses access to it, so
+      // refreshing in place would 403. Send them back to the list instead.
+      if (currentUser?.role === 'RECRUITER') {
+        router.push('/admin/candidates');
+      } else {
+        await fetchCandidate();
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to reassign interview';
       toast.error(msg);
