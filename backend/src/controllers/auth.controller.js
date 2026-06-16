@@ -125,10 +125,15 @@ const listUsers = async (req, res, next) => {
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, role, department, isActive, password } = req.body;
+    const { name, email, role, department, isActive, password } = req.body;
 
     const data = {};
     if (name !== undefined)       data.name = name;
+    if (email !== undefined) {
+      const e = String(email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return error(res, 'A valid email is required', 422);
+      data.email = e;
+    }
     if (role !== undefined)       data.role = role;
     if (department !== undefined) data.department = department;
     if (isActive !== undefined)   data.isActive = isActive;
@@ -141,6 +146,7 @@ const updateUser = async (req, res, next) => {
     });
     return success(res, user, 'User updated');
   } catch (err) {
+    if (err.code === 'P2002') return error(res, 'That email is already in use', 409);
     next(err);
   }
 };

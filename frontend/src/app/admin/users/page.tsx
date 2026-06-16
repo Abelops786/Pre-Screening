@@ -37,6 +37,7 @@ export default function UsersPage() {
   // Edit-user modal state
   const [editUser,   setEditUser]   = useState<User | null>(null);
   const [editName,   setEditName]   = useState('');
+  const [editEmail,  setEditEmail]  = useState('');
   const [editRole,   setEditRole]   = useState<'ADMIN' | 'RECRUITER'>('RECRUITER');
   const [editDept,   setEditDept]   = useState('');
   const [editActive, setEditActive] = useState(true);
@@ -106,6 +107,7 @@ export default function UsersPage() {
   const openEdit = (user: User) => {
     setEditUser(user);
     setEditName(user.name);
+    setEditEmail(user.email);
     setEditRole(user.role === 'ADMIN' ? 'ADMIN' : 'RECRUITER');
     setEditDept(user.department ?? '');
     setEditActive(user.isActive ?? true);
@@ -114,10 +116,13 @@ export default function UsersPage() {
   const submitEdit = async () => {
     if (!editUser) return;
     if (editName.trim().length < 2) { toast.error('Name must be at least 2 characters'); return; }
+    const emailTrim = editEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) { toast.error('Enter a valid email'); return; }
     setSavingEdit(true);
     try {
       const payload: Record<string, unknown> = {
         name: editName.trim(),
+        email: emailTrim,
         department: editDept.trim() || null,
         isActive: editActive,
       };
@@ -295,6 +300,10 @@ export default function UsersPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Full name</label>
                 <input value={editName} onChange={(e) => setEditName(e.target.value)} className={inputClass} placeholder="Full name" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} type="email" className={inputClass} placeholder="name@company.com" />
               </div>
               {editUser.role === 'SUPER_ADMIN' ? (
                 <div>
