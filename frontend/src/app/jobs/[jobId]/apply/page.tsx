@@ -44,6 +44,14 @@ export default function JobApplyPage() {
 
   const setInfoField = (k: string) => (v: string) => setInfo((p) => ({ ...p, [k]: v }));
   const setAnswer = (key: string, v: string | string[]) => setAnswers((p) => ({ ...p, [key]: v }));
+
+  // This job is for a fixed language — lock the "language pair" answer to it so
+  // candidates can't pick a mismatching language (which then fails the voice test).
+  useEffect(() => {
+    if (!job?.language || !schema) return;
+    const langField = schema.sections.flatMap((s) => s.fields).find((f) => f.optionsSource === 'languages');
+    if (langField) setAnswer(langField.key, job.language);
+  }, [job, schema]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleMulti = (key: string, v: string) => setAnswers((p) => {
     const arr = (p[key] as string[]) || [];
     return { ...p, [key]: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v] };
@@ -290,7 +298,8 @@ export default function JobApplyPage() {
                       <DynField key={f.key} field={f}
                         value={answers[f.key]}
                         onChange={(v) => setAnswer(f.key, v)}
-                        onToggle={(v) => toggleMulti(f.key, v)} />
+                        onToggle={(v) => toggleMulti(f.key, v)}
+                        lockedLanguage={job.language || undefined} />
                     ))}
                   </div>
                 )}
@@ -427,11 +436,12 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-function DynField({ field, value, onChange, onToggle }: {
+function DynField({ field, value, onChange, onToggle, lockedLanguage }: {
   field: QField;
   value: string | string[] | undefined;
   onChange: (v: string) => void;
   onToggle: (v: string) => void;
+  lockedLanguage?: string;
 }) {
   const label = (
     <label className="block text-sm font-medium text-gray-700">
@@ -456,6 +466,18 @@ function DynField({ field, value, onChange, onToggle }: {
         </div>
       );
     case 'select': {
+      // For a job with a fixed language, the language field is locked to that
+      // language (read-only) instead of offering the full list — so candidates
+      // can't pick a different language than the one the voice test assesses.
+      if (field.optionsSource === 'languages' && lockedLanguage) {
+        return (
+          <div className="space-y-1">{label}
+            <input value={lockedLanguage} readOnly disabled
+              className={`${cls} bg-gray-50 text-gray-600 cursor-not-allowed`} />
+            <p className="text-xs text-gray-400">Set by this position — you&apos;re applying for {lockedLanguage}.</p>
+          </div>
+        );
+      }
       const options = field.optionsSource === 'languages' ? INTERPRETATION_LANGUAGES : (field.options || []);
       return (
         <div className="space-y-1">{label}
