@@ -109,10 +109,16 @@ const transcribe = async (audioBuffer, mimeType, selectedLanguage) => {
     temperature:      0,
   };
 
-  // Bug 1 fix: use proper ISO-639-1 map instead of naive slice(0,2)
+  // Only send a language hint when we have a KNOWN, valid ISO-639-1 code.
+  // For unmapped languages (e.g. Marshallese) we must NOT send a made-up code
+  // like "ma" — Whisper rejects it (400) and the whole request fails. Omitting
+  // the hint lets Whisper auto-detect instead, so the transcription still runs.
   const whisperLang = selectedLanguage?.toLowerCase();
-  if (whisperLang && whisperLang !== 'other') {
-    params.language = LANGUAGE_ISO_MAP[whisperLang] ?? whisperLang.slice(0, 2);
+  const isoCode = whisperLang && whisperLang !== 'other' ? LANGUAGE_ISO_MAP[whisperLang] : undefined;
+  if (isoCode) {
+    params.language = isoCode;
+  } else if (whisperLang && whisperLang !== 'other') {
+    logger.warn('No ISO mapping for language; letting Whisper auto-detect', { language: whisperLang });
   }
 
   logger.info('Calling Whisper API', { language: params.language });
