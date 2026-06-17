@@ -408,7 +408,7 @@ export default function CandidateProfilePage() {
             <div className="space-y-2">
               <p className="text-sm text-gray-700">
                 <span className="font-semibold text-green-700">Booked:</span>{' '}
-                {new Date(candidate.interviews[0].scheduledTime).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}
+                {new Date(candidate.interviews[0].scheduledTime).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })} ET
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 {candidate.interviews[0].msTeamsLink && (

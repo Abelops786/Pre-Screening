@@ -19,6 +19,11 @@ const TOO_CLOSE_MS = SLOT_MS + BOOKING_BUFFER_MS;
 // Recruiter hours are wall-clock in this business timezone. We compare "now"
 // in the SAME frame so "today" and the 1-hour rule are correct everywhere.
 const BUSINESS_TZ = process.env.BUSINESS_TZ || 'America/New_York';
+// Candidate-facing label for that zone (override with BUSINESS_TZ_LABEL if you
+// change BUSINESS_TZ). Shown on the booking calendar, labels and emails so
+// candidates/recruiters aren't confused by their own local time.
+const TZ_LABEL = process.env.BUSINESS_TZ_LABEL || 'ET';
+const TZ_NOTE = `All times are shown in US Eastern Time (${TZ_LABEL}).`;
 
 // Current wall-clock time in BUSINESS_TZ, expressed as a UTC instant of those
 // same wall-clock numbers — matching how each slot below is built. This makes
@@ -91,10 +96,10 @@ const fmtTime = (hh, mm) => {
 const fmtDay = (slot) =>
   slot.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
 
-// Wall-clock label for a stored instant (e.g. "Monday, June 8 · 9:00 AM")
+// Wall-clock label for a stored instant (e.g. "Monday, June 8 · 9:00 AM ET")
 const fmtInstant = (iso) => {
   const dt = new Date(iso);
-  return `${fmtDay(dt)} · ${fmtTime(dt.getUTCHours(), dt.getUTCMinutes())}`;
+  return `${fmtDay(dt)} · ${fmtTime(dt.getUTCHours(), dt.getUTCMinutes())} ${TZ_LABEL}`;
 };
 
 // Is this slot covered by a recruiter block (full day off, or a time range)?
@@ -210,6 +215,7 @@ const getSlotsForCandidate = async (req, res, next) => {
       candidateName: candidate.fullName,
       recruiterId: recruiter.id,
       slotMinutes: SLOT_MINUTES,
+      timezone: TZ_NOTE,
       slots,
     });
   } catch (err) {

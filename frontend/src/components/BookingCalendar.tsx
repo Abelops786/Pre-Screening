@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
-import { Loader2, CalendarCheck, Video, CheckCircle } from 'lucide-react';
+import { Loader2, CalendarCheck, Video, CheckCircle, Clock } from 'lucide-react';
 
 interface Slot { iso: string; day: string; time: string; booked?: boolean }
 interface SlotsResponse {
@@ -12,6 +12,7 @@ interface SlotsResponse {
   candidateName?: string;
   slots: Slot[];
   message?: string;
+  timezone?: string;
 }
 
 /**
@@ -100,6 +101,10 @@ export default function BookingCalendar({ candidateId }: { candidateId: string }
 
   return (
     <div className="space-y-5 max-h-[55vh] overflow-y-auto pr-1 text-left">
+      <div className="flex items-center gap-2 text-xs text-brand-700 bg-brand-50 border border-brand-100 rounded-lg px-3 py-2">
+        <Clock size={14} className="shrink-0" />
+        {data?.timezone || 'All times are shown in US Eastern Time (ET).'}
+      </div>
       {days.map((d) => (
         <div key={d}>
           <p className="text-sm font-semibold text-gray-700 mb-2">{d}</p>
