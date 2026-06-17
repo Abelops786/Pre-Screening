@@ -3,8 +3,16 @@ const logger = require('../utils/logger');
 const prisma = require('../config/database');
 
 // Interview times are wall-clock in the business timezone (US Eastern). Label
-// them so candidates/recruiters don't assume their own local time.
+// them (with the current GMT offset) so recipients don't assume local time.
 const TZ_LABEL = process.env.BUSINESS_TZ_LABEL || 'ET';
+const BUSINESS_TZ = process.env.BUSINESS_TZ || 'America/New_York';
+const gmtOffset = () => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TZ, timeZoneName: 'shortOffset' }).formatToParts(new Date());
+    return parts.find((p) => p.type === 'timeZoneName')?.value || 'GMT-5';
+  } catch { return 'GMT-5'; }
+};
+const TZ_SUFFIX = `${TZ_LABEL} (${gmtOffset()}, US Eastern Time)`;
 
 let transporter;
 
@@ -147,7 +155,7 @@ const sendLevel1Pass = async (candidate, teamsLink = null) => {
 const sendInterviewBooked = async (candidate, scheduledTime, teamsLink = null) => {
   const when = `${new Date(scheduledTime).toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
-  })} ${TZ_LABEL} (US Eastern Time)`;
+  })} ${TZ_SUFFIX}`;
   const joinSection = teamsLink
     ? `<p style="margin:16px 0"><a href="${teamsLink}" style="display:inline-block;background:#105279;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Join Microsoft Teams Interview</a></p>`
     : '<p style="margin-top:16px">Your interviewer will share the meeting details before the interview.</p>';
@@ -167,7 +175,7 @@ const sendInterviewBooked = async (candidate, scheduledTime, teamsLink = null) =
 const sendStaffInterviewNotice = async (to, staffName, candidate, scheduledTime, teamsLink = null) => {
   const when = `${new Date(scheduledTime).toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
-  })} ${TZ_LABEL} (US Eastern Time)`;
+  })} ${TZ_SUFFIX}`;
   const joinSection = teamsLink
     ? `<p style="margin:16px 0"><a href="${teamsLink}" style="display:inline-block;background:#105279;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Join Microsoft Teams</a></p>`
     : '';
@@ -303,7 +311,7 @@ const sendSummaryReport = async (to, stats) => {
 const sendLeaveCoverageSummary = async (to, { recruiterName, forwarded = [], unassigned = [] }) => {
   const fmt = (t) => `${new Date(t).toLocaleString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
-  })} ${TZ_LABEL}`;
+  })} ${TZ_LABEL} (${gmtOffset()})`;
   const fwdRows = forwarded.length
     ? `<ul>${forwarded.map((f) => `<li><strong>${f.candidateName || 'Candidate'}</strong> — ${fmt(f.when)} → moved to <strong>${f.newRecruiterName}</strong></li>`).join('')}</ul>`
     : '<p style="color:#6b7280">None.</p>';

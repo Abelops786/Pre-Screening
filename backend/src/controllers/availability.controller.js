@@ -23,7 +23,17 @@ const BUSINESS_TZ = process.env.BUSINESS_TZ || 'America/New_York';
 // change BUSINESS_TZ). Shown on the booking calendar, labels and emails so
 // candidates/recruiters aren't confused by their own local time.
 const TZ_LABEL = process.env.BUSINESS_TZ_LABEL || 'ET';
-const TZ_NOTE = `All times are shown in US Eastern Time (${TZ_LABEL}).`;
+// Current GMT offset for the business zone (e.g. "GMT-4" in summer / "GMT-5"
+// in winter) — computed so it stays correct across daylight saving.
+const gmtOffset = (tz) => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date());
+    return parts.find((p) => p.type === 'timeZoneName')?.value || 'GMT-5';
+  } catch { return 'GMT-5'; }
+};
+const TZ_GMT = gmtOffset(BUSINESS_TZ);
+const TZ_SHORT = `${TZ_LABEL} (${TZ_GMT})`;                                  // "ET (GMT-4)"
+const TZ_NOTE = `All times are shown in US Eastern Time (${TZ_LABEL}, ${TZ_GMT}).`;
 
 // Current wall-clock time in BUSINESS_TZ, expressed as a UTC instant of those
 // same wall-clock numbers — matching how each slot below is built. This makes
@@ -99,7 +109,7 @@ const fmtDay = (slot) =>
 // Wall-clock label for a stored instant (e.g. "Monday, June 8 · 9:00 AM ET")
 const fmtInstant = (iso) => {
   const dt = new Date(iso);
-  return `${fmtDay(dt)} · ${fmtTime(dt.getUTCHours(), dt.getUTCMinutes())} ${TZ_LABEL}`;
+  return `${fmtDay(dt)} · ${fmtTime(dt.getUTCHours(), dt.getUTCMinutes())} ${TZ_SHORT}`;
 };
 
 // Is this slot covered by a recruiter block (full day off, or a time range)?
