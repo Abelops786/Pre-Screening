@@ -7,7 +7,7 @@ import { getStoredUser, clearAuth } from '@/lib/auth';
 import type { User } from '@/types';
 import {
   LayoutDashboard, Users, UserCircle, LogOut,
-  Menu, X, ChevronRight, Settings, Briefcase, Building2, ClipboardList, CalendarClock,
+  Menu, X, ChevronRight, Settings, Briefcase, Building2, ClipboardList, CalendarClock, CalendarDays,
 } from 'lucide-react';
 
 const navItems = [
@@ -17,6 +17,7 @@ const navItems = [
   { href: '/admin/questionnaires', label: 'Questionnaires', icon: ClipboardList, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { href: '/admin/candidates',  label: 'Candidates',      icon: Users,           roles: ['SUPER_ADMIN', 'ADMIN', 'RECRUITER'] },
   { href: '/admin/availability', label: 'My Availability', icon: CalendarClock,  roles: ['SUPER_ADMIN', 'ADMIN', 'RECRUITER'] },
+  { href: '/admin/team-availability', label: 'Team Availability', icon: CalendarDays, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { href: '/admin/users',       label: 'User Management', icon: UserCircle,      roles: ['SUPER_ADMIN'] },
   { href: '/admin/settings',    label: 'Settings',        icon: Settings,        roles: ['SUPER_ADMIN', 'ADMIN'] },
 ];

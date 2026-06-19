@@ -12,7 +12,11 @@ router.use(authenticate);
 router.get('/',             isRecruiter, ctrl.listMine);
 router.get('/my-interviews', isRecruiter, ctrl.myInterviews);
 router.get('/recruiters', isAdmin, ctrl.listRecruiters);
+router.get('/overview', isAdmin, ctrl.availabilityOverview);
+router.get('/recruiter/:recruiterId/slots', isAdmin, ctrl.recruiterSlots);
+router.get('/interviews/:id/recruiter-options', isAdmin, ctrl.recruiterOptionsForInterview);
 router.post('/interviews/:id/reassign', isAdmin, ctrl.reassignBookedInterview);
+router.post('/interviews/:id/reschedule', isAdmin, ctrl.rescheduleInterview);
 router.post('/',            isRecruiter, ctrl.createSlotRule);
 router.delete('/:id',       isRecruiter, ctrl.deleteSlotRule);
 

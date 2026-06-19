@@ -456,6 +456,134 @@ const reassignBookedInterview = async (req, res, next) => {
   }
 };
 
+// Is the instant inside one of the recruiter's weekly availability rules?
+const isWithinRules = (when, rules) => {
+  const dow = when.getUTCDay();
+  const m = minutesOfUTC(when);
+  return rules.some((r) => {
+    if (r.dayOfWeek !== dow) return false;
+    const [sh, sm] = r.startTime.split(':').map(Number);
+    const [eh, em] = r.endTime.split(':').map(Number);
+    return m >= sh * 60 + sm && m < eh * 60 + em;
+  });
+};
+const hasConflict = (whenMs, timesMs) => timesMs.some((t) => Math.abs(t - whenMs) < TOO_CLOSE_MS);
+
+// Each active recruiter's free/busy status at a given interview's time, so a
+// Super Admin can see who's available before reassigning.
+const recruiterOptionsForInterview = async (req, res, next) => {
+  try {
+    const itv = await prisma.interview.findUnique({ where: { id: req.params.id }, select: { id: true, recruiterId: true, scheduledTime: true } });
+    if (!itv) return error(res, 'Interview not found', 404);
+    const when = new Date(itv.scheduledTime);
+    const whenMs = when.getTime();
+
+    const recruiters = await prisma.user.findMany({ where: { role: 'RECRUITER', isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } });
+    const ids = recruiters.map((r) => r.id);
+    const [rules, exceptions, interviews] = await Promise.all([
+      prisma.recruiterAvailability.findMany({ where: { recruiterId: { in: ids } } }),
+      prisma.availabilityException.findMany({ where: { recruiterId: { in: ids } } }),
+      prisma.interview.findMany({ where: { recruiterId: { in: ids }, id: { not: itv.id } }, select: { recruiterId: true, scheduledTime: true } }),
+    ]);
+    const rulesBy = new Map(ids.map((id) => [id, rules.filter((r) => r.recruiterId === id)]));
+    const excBy = new Map(ids.map((id) => [id, exceptions.filter((e) => e.recruiterId === id)]));
+    const busyBy = new Map(ids.map((id) => [id, interviews.filter((t) => t.recruiterId === id).map((t) => new Date(t.scheduledTime).getTime())]));
+
+    const options = recruiters.map((r) => ({
+      id: r.id,
+      name: r.name,
+      current: r.id === itv.recruiterId,
+      free: isWithinRules(when, rulesBy.get(r.id) || []) && !isBlocked(when, excBy.get(r.id) || []) && !hasConflict(whenMs, busyBy.get(r.id) || []),
+    }));
+    return success(res, { scheduledLabel: fmtInstant(itv.scheduledTime), options });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Open slots for a specific recruiter (used by the reschedule picker). Optional
+// ?exclude=<interviewId> frees up that interview's own current slot.
+const recruiterSlots = async (req, res, next) => {
+  try {
+    const { recruiterId } = req.params;
+    const exclude = req.query.exclude;
+    const recruiter = await prisma.user.findUnique({ where: { id: recruiterId }, select: { id: true, name: true, isActive: true } });
+    if (!recruiter || !recruiter.isActive) return error(res, 'Recruiter not found', 404);
+
+    const rules = await prisma.recruiterAvailability.findMany({ where: { recruiterId } });
+    const interviews = await prisma.interview.findMany({ where: { recruiterId, ...(exclude ? { id: { not: String(exclude) } } : {}) }, select: { scheduledTime: true } });
+    const exceptions = await prisma.availabilityException.findMany({ where: { recruiterId } });
+    const slots = generateSlots(rules, interviews.map((i) => i.scheduledTime), exceptions);
+    return success(res, { recruiterName: recruiter.name, timezone: TZ_NOTE, slots });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Reschedule an interview to a new time (and optionally a new recruiter).
+const rescheduleInterview = async (req, res, next) => {
+  try {
+    const { scheduledTime, recruiterId } = req.body || {};
+    if (!scheduledTime) return error(res, 'A new time is required', 422);
+    const itv = await prisma.interview.findUnique({ where: { id: req.params.id }, include: { candidate: true } });
+    if (!itv) return error(res, 'Interview not found', 404);
+
+    const when = new Date(scheduledTime);
+    if (Number.isNaN(when.getTime())) return error(res, 'Invalid time', 422);
+    const targetId = recruiterId || itv.recruiterId;
+
+    const rules = await prisma.recruiterAvailability.findMany({ where: { recruiterId: targetId } });
+    const exceptions = await prisma.availabilityException.findMany({ where: { recruiterId: targetId } });
+    const others = await prisma.interview.findMany({ where: { recruiterId: targetId, id: { not: itv.id } }, select: { scheduledTime: true } });
+    if (!isWithinRules(when, rules)) return error(res, 'That recruiter has no availability at that time', 422);
+    if (isBlocked(when, exceptions)) return error(res, 'That recruiter has blocked that time', 409);
+    if (hasConflict(when.getTime(), others.map((i) => new Date(i.scheduledTime).getTime()))) {
+      return error(res, 'That recruiter already has an interview at/near that time', 409);
+    }
+
+    await prisma.interview.update({ where: { id: itv.id }, data: { scheduledTime: when, recruiterId: targetId } });
+    if (targetId !== itv.recruiterId) {
+      await prisma.recruiterCandidateAssignment.updateMany({ where: { candidateId: itv.candidateId, recruiterId: itv.recruiterId }, data: { recruiterId: targetId } });
+    }
+
+    const newRec = await prisma.user.findUnique({ where: { id: targetId }, select: { name: true, email: true } });
+    if (itv.candidate?.email) emailService.sendInterviewBooked(itv.candidate, when, itv.msTeamsLink).catch(() => {});
+    if (newRec?.email) emailService.sendStaffInterviewNotice(newRec.email, newRec.name, itv.candidate, when, itv.msTeamsLink).catch(() => {});
+
+    return success(res, { scheduledTime: when, scheduledLabel: fmtInstant(when), recruiterName: newRec?.name }, 'Interview rescheduled');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Admin overview: every active recruiter's weekly hours, time off and upcoming interviews.
+const availabilityOverview = async (req, res, next) => {
+  try {
+    const recruiters = await prisma.user.findMany({ where: { role: 'RECRUITER', isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, email: true } });
+    const ids = recruiters.map((r) => r.id);
+    const now = new Date();
+    const todayUtc = new Date(); todayUtc.setUTCHours(0, 0, 0, 0);
+    const [rules, exceptions, interviews] = await Promise.all([
+      prisma.recruiterAvailability.findMany({ where: { recruiterId: { in: ids } }, orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] }),
+      prisma.availabilityException.findMany({ where: { recruiterId: { in: ids }, date: { gte: todayUtc } }, orderBy: { date: 'asc' } }),
+      prisma.interview.findMany({ where: { recruiterId: { in: ids }, scheduledTime: { gte: now } }, orderBy: { scheduledTime: 'asc' }, select: { recruiterId: true, scheduledTime: true } }),
+    ]);
+    const data = recruiters.map((r) => ({
+      id: r.id,
+      name: r.name,
+      hours: rules.filter((x) => x.recruiterId === r.id).map((x) => ({ dayOfWeek: x.dayOfWeek, day: DAY_NAMES[x.dayOfWeek], startTime: x.startTime, endTime: x.endTime })),
+      timeOff: exceptions.filter((x) => x.recruiterId === r.id).map((x) => ({
+        dayLabel: new Date(x.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }),
+        allDay: x.allDay, startTime: x.startTime, endTime: x.endTime, reason: x.reason,
+      })),
+      upcoming: interviews.filter((x) => x.recruiterId === r.id).map((x) => fmtInstant(x.scheduledTime)),
+    }));
+    return success(res, { recruiters: data, timezone: TZ_NOTE });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Active recruiters for the manual-reassign dropdown (ADMIN+).
 const listRecruiters = async (req, res, next) => {
   try {
@@ -470,4 +598,4 @@ const listRecruiters = async (req, res, next) => {
   }
 };
 
-module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews, listExceptions, createException, deleteException, reassignBookedInterview, listRecruiters };
+module.exports = { listMine, createSlotRule, deleteSlotRule, getSlotsForCandidate, bookSlot, myInterviews, listExceptions, createException, deleteException, reassignBookedInterview, listRecruiters, recruiterOptionsForInterview, recruiterSlots, rescheduleInterview, availabilityOverview };

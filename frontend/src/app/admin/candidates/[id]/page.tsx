@@ -61,8 +61,15 @@ export default function CandidateProfilePage() {
   const [outcomeSaving, setOutcomeSaving] = useState(false);
   const [reassigning, setReassigning] = useState(false);
   const [recruiters, setRecruiters] = useState<{ id: string; name: string }[]>([]);
+  const [recruiterOptions, setRecruiterOptions] = useState<{ id: string; name: string; free: boolean; current: boolean }[]>([]);
   const [selectedRecruiter, setSelectedRecruiter] = useState('');
   const canManageInterview = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'ADMIN';
+  // Reschedule modal
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [reschedRecruiter, setReschedRecruiter] = useState('');
+  const [reschedSlots, setReschedSlots] = useState<{ iso: string; day: string; time: string; booked?: boolean }[]>([]);
+  const [reschedLoading, setReschedLoading] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
 
   const fetchCandidate = async () => {
     try {
@@ -85,6 +92,15 @@ export default function CandidateProfilePage() {
     api.get('/availability/recruiters').then((r) => setRecruiters(r.data.data)).catch(() => {});
   }, [canManageInterview]);
 
+  // Free/busy of each recruiter at this interview's time, for the reassign dropdown.
+  const interviewId = candidate?.interviews?.[0]?.id;
+  useEffect(() => {
+    if (!canManageInterview || !interviewId) return;
+    api.get(`/availability/interviews/${interviewId}/recruiter-options`)
+      .then((r) => setRecruiterOptions(r.data.data.options))
+      .catch(() => {});
+  }, [canManageInterview, interviewId]);
+
   useEffect(() => {
     if (candidate?.interviews?.[0]?.msTeamsLink) {
       setTeamsLink(candidate.interviews[0].msTeamsLink);
@@ -103,6 +119,37 @@ export default function CandidateProfilePage() {
     } finally {
       setGeneratingLink(false);
     }
+  };
+
+  const fetchReschedSlots = async (recruiterId: string) => {
+    if (!recruiterId || !interviewId) return;
+    setReschedLoading(true);
+    try {
+      const { data } = await api.get(`/availability/recruiter/${recruiterId}/slots?exclude=${interviewId}`);
+      setReschedSlots(data.data.slots);
+    } catch { setReschedSlots([]); }
+    finally { setReschedLoading(false); }
+  };
+
+  const openReschedule = () => {
+    const current = recruiterOptions.find((o) => o.current)?.id || recruiters[0]?.id || '';
+    setReschedRecruiter(current);
+    setShowReschedule(true);
+    if (current) fetchReschedSlots(current);
+  };
+
+  const doReschedule = async (iso: string) => {
+    if (!interviewId) return;
+    setRescheduling(true);
+    try {
+      const { data } = await api.post(`/availability/interviews/${interviewId}/reschedule`, { scheduledTime: iso, recruiterId: reschedRecruiter });
+      toast.success(data.message || 'Interview rescheduled');
+      setShowReschedule(false);
+      await fetchCandidate();
+    } catch (err: unknown) {
+      const m = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to reschedule';
+      toast.error(m);
+    } finally { setRescheduling(false); }
   };
 
   const copyBookingLink = () => {
@@ -429,13 +476,21 @@ export default function CandidateProfilePage() {
                     <select value={selectedRecruiter} onChange={(e) => setSelectedRecruiter(e.target.value)} disabled={reassigning}
                       className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                       <option value="">Reassign to…</option>
-                      {recruiters.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      {[...recruiterOptions].filter((o) => !o.current)
+                        .sort((a, b) => Number(b.free) - Number(a.free) || a.name.localeCompare(b.name))
+                        .map((o) => <option key={o.id} value={o.id}>{o.name} — {o.free ? 'Free at this time ✓' : 'Busy / off'}</option>)}
                     </select>
                     <button onClick={() => reassignInterview(candidate.interviews![0].id, selectedRecruiter)} disabled={reassigning || !selectedRecruiter}
                       className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
                       {reassigning ? <Loader2 size={15} className="animate-spin" /> : null} Reassign
                     </button>
                   </div>
+                )}
+                {canManageInterview && (
+                  <button onClick={openReschedule}
+                    className="inline-flex items-center gap-2 border border-brand-300 text-brand-700 hover:bg-brand-50 text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+                    <CalendarClock size={15} /> Reschedule
+                  </button>
                 )}
               </div>
             </div>
@@ -595,6 +650,51 @@ export default function CandidateProfilePage() {
           </button>
         </div>
       </Section>
+
+      {/* Reschedule modal — pick recruiter + new slot */}
+      {showReschedule && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !rescheduling && setShowReschedule(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-3">
+              <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <CalendarClock size={18} className="text-brand-600" /> Reschedule Interview
+              </h2>
+              <button onClick={() => setShowReschedule(false)} disabled={rescheduling} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Recruiter</label>
+            <select value={reschedRecruiter} onChange={(e) => { setReschedRecruiter(e.target.value); fetchReschedSlots(e.target.value); }} disabled={rescheduling}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 mb-3">
+              {recruiters.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            <p className="text-xs text-gray-400 mb-2">Pick a new time from this recruiter&apos;s open slots (US Eastern Time).</p>
+            {reschedLoading ? (
+              <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-brand-600" /></div>
+            ) : (() => {
+              const groups: Record<string, typeof reschedSlots> = {};
+              reschedSlots.filter((s) => !s.booked).forEach((s) => { (groups[s.day] = groups[s.day] || []).push(s); });
+              const days = Object.keys(groups);
+              if (days.length === 0) return <p className="text-sm text-gray-400 text-center py-6">No open slots for this recruiter.</p>;
+              return (
+                <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
+                  {days.map((d) => (
+                    <div key={d}>
+                      <p className="text-sm font-semibold text-gray-700 mb-2">{d}</p>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {groups[d].map((s) => (
+                          <button key={s.iso} onClick={() => doReschedule(s.iso)} disabled={rescheduling}
+                            className="text-sm border border-gray-200 hover:border-brand-400 hover:bg-brand-50 disabled:opacity-50 rounded-lg py-2 transition-colors">
+                            {s.time}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Reject modal — reason dropdown + free text */}
       {showReject && (
