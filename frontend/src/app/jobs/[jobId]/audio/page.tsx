@@ -242,7 +242,7 @@ function AudioContent() {
                     <CheckCircle size={32} className="text-green-500" />
                   </div>
                   <h2 className="text-xl font-bold text-green-700">Level 1 Passed!</h2>
-                  <p className="text-gray-600 text-sm">Congratulations! You have successfully passed the initial screening. You will receive an email with an interview schedule link. Please check your email and pick a time for your interview.</p>
+                  <p className="text-gray-600 text-sm">Congratulations — you&apos;ve passed the initial screening! 🎉 <strong>Book your interview right now</strong> using the scheduler below. We&apos;ll also email you a confirmation once you book.</p>
                   {(result.aiFluencyScore ?? result.fluencyScore) !== null && (
                     <div className="inline-block bg-green-50 border border-green-200 rounded-xl px-4 py-2">
                       <p className="text-xs text-green-600 font-medium">Fluency Score</p>

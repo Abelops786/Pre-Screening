@@ -39,8 +39,9 @@ function CompleteContent() {
               <p className="text-gray-500 text-sm mb-4">
                 Thank you for completing the screening process. Our team will review your application and be in touch shortly.
               </p>
-              <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-500">
-                Make sure to check your <strong>spam/junk folder</strong> if you do not receive an email within the next few minutes.
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-4 text-left text-sm text-amber-800">
+                <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                <span><strong>Important:</strong> Please check your <strong>Spam / Junk folder</strong> if you don&apos;t see our email within a few minutes — and mark it &ldquo;Not spam&rdquo; so you receive future updates.</span>
               </div>
             </>
           )}

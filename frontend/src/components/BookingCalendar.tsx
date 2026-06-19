@@ -83,7 +83,7 @@ export default function BookingCalendar({ candidateId }: { candidateId: string }
           <Video size={16} /> Join Microsoft Teams
         </a>
       )}
-      <p className="text-xs text-gray-400 mt-4">A confirmation has been sent to your email.</p>
+      <p className="text-xs text-gray-400 mt-4">A confirmation has been sent to your email — please check your <strong>spam/junk folder</strong> if you don&apos;t see it.</p>
     </div>
   );
 

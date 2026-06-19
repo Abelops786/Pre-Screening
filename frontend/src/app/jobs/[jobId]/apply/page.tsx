@@ -11,6 +11,9 @@ import { COUNTRY_CODES } from '@/lib/countryCodes';
 
 const cls = 'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition';
 const STEP_SIZE = 3;
+// City/Country are collected once in Personal Information; these questionnaire
+// fields duplicate that, so they're hidden from the form.
+const DUPLICATE_LOCATION_KEYS = new Set(['city', 'country', 'usCity', 'intlCity', 'intlCountry']);
 
 type Answers = Record<string, string | string[]>;
 
@@ -64,6 +67,9 @@ export default function JobApplyPage() {
     || (answers.roleType === 'dedicated_hourly' ? 'DEDICATED_HOURLY' : answers.roleType === 'per_minute' ? 'PER_MINUTE' : null);
 
   const fieldVisible = (f: QField): boolean => {
+    // City/Country are already collected once in Personal Information ("City /
+    // Country"), so don't ask for them again in the questionnaire.
+    if (DUPLICATE_LOCATION_KEYS.has(f.key)) return false;
     if (f.hideIfJobHas === 'positionType' && job?.positionType) return false;
     if (f.hideIfJobHas === 'roleType' && job?.roleType) return false;
     const s = f.showIf;
@@ -111,7 +117,7 @@ export default function JobApplyPage() {
         if (!cvFile) return 'Please upload your CV / Resume';
       } else {
         for (const f of visibleFields(item.sec)) {
-          if (!f.required) continue;
+          // Every visible screening question is mandatory — candidates can't skip any.
           const v = answers[f.key];
           if (f.type === 'checkbox') { if (!Array.isArray(v) || v.length === 0) return `"${f.label}" is required`; }
           else if (f.type === 'confirm') { if (v !== 'Yes') return `Please confirm: "${f.label}"`; }
