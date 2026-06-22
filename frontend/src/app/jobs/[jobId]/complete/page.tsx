@@ -21,14 +21,14 @@ function CompleteContent() {
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           {disqualified ? (
             <>
-              <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
-                <AlertCircle size={32} className="text-amber-500" />
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle size={32} className="text-green-500" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Application Received</h2>
               <p className="text-gray-500 text-sm mb-6">
-                Thank you for your interest. Unfortunately, your application did not meet all the requirements for this position at this time.
+                Thank you for completing your application. We&apos;ve received your submission and our team is currently reviewing it. We&apos;ll be in touch with the next steps soon.
               </p>
-              <p className="text-xs text-gray-400">We encourage you to check our other open positions that may be a better fit.</p>
+              <p className="text-xs text-gray-400">Please keep an eye on your email — including your spam/junk folder — for updates from our team.</p>
             </>
           ) : (
             <>
