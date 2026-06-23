@@ -48,7 +48,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <p className="text-xs text-brand-200">Admin Portal</p>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
         {allowedNav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/admin' && pathname.startsWith(href));
           return (

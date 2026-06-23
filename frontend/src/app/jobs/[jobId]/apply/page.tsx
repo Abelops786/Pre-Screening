@@ -67,6 +67,8 @@ export default function JobApplyPage() {
     || (answers.roleType === 'dedicated_hourly' ? 'DEDICATED_HOURLY' : answers.roleType === 'per_minute' ? 'PER_MINUTE' : null);
 
   const fieldVisible = (f: QField): boolean => {
+    // Admin hid this question — keep it in the schema but don't show candidates.
+    if (f.hidden) return false;
     // City/Country are already collected once in Personal Information ("City /
     // Country"), so don't ask for them again in the questionnaire.
     if (DUPLICATE_LOCATION_KEYS.has(f.key)) return false;
@@ -229,6 +231,10 @@ export default function JobApplyPage() {
           </div>
           <h1 className="text-2xl font-bold text-white">{job.title}</h1>
           {job.description && <p className="text-brand-100 text-sm mt-2 max-w-lg mx-auto">{job.description}</p>}
+          <a href="https://careers.gruponoainternational.com" target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1.5 mt-4 text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/30 rounded-lg px-4 py-2 transition-colors">
+            View all open positions
+          </a>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 space-y-5">

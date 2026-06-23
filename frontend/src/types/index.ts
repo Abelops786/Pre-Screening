@@ -36,6 +36,8 @@ export interface QField {
   required?: boolean;
   placeholder?: string;
   protected?: boolean;
+  hidden?: boolean;                        // admin hid it — kept but not shown to candidates
+  locked?: boolean;                        // admin locked it — can't be edited/removed until unlocked
   script?: string;
   guidance?: string;
   score?: number;                          // for confirm: points awarded when confirmed

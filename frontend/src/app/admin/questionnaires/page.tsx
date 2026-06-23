@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
 import { toast } from 'react-toastify';
 import {
-  Loader2, Plus, Trash2, ChevronUp, ChevronDown, Save, RotateCcw, Lock, GripVertical, Star,
+  Loader2, Plus, Trash2, ChevronUp, ChevronDown, Save, RotateCcw, Lock, Unlock, GripVertical, Star, Copy, Eye, EyeOff,
 } from 'lucide-react';
 import type { Department, QuestionnaireTemplate, QSection, QField, QFieldType } from '@/types';
 
@@ -37,8 +37,18 @@ export default function QuestionnairesPage() {
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [dirty,    setDirty]    = useState(false);
+  // Holds a copied questionnaire to drop into the next department we switch to.
+  const pendingCopy = useRef<QSection[] | null>(null);
 
   const load = async (dept: Department) => {
+    // If a "duplicate to" is pending, use the copy instead of loading from the API.
+    if (pendingCopy.current) {
+      setSections(pendingCopy.current);
+      pendingCopy.current = null;
+      setDirty(true);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data } = await api.get(`/questionnaires/${dept}`);
@@ -85,6 +95,27 @@ export default function QuestionnairesPage() {
     s[si].fields[fi] = { ...s[si].fields[fi], ...patch };
     return s;
   });
+  // Clone a question (fresh key, never inherits the system "protected" flag or
+  // the important mark) and drop it in right after the original.
+  const duplicateField = (si: number, fi: number) => mutate((s) => {
+    const orig = s[si].fields[fi];
+    const copy: QField = { ...structuredClone(orig), key: genKey(), protected: false, important: false, importantWeight: undefined, correctAnswer: undefined, locked: false, label: `${orig.label} (copy)` };
+    s[si].fields.splice(fi + 1, 0, copy);
+    return s;
+  });
+
+  // Copy the whole questionnaire into another department (review + Save there).
+  const duplicateQuestionnaire = (target: Department) => {
+    if (target === active) return;
+    if (!confirm(`Copy this questionnaire into "${DEPT_TABS.find((d) => d.key === target)?.label}"? You'll be taken there to review and Save — it replaces what's currently set for that department once you Save.`)) return;
+    const copy = structuredClone(sections).map((sec) => ({
+      ...sec,
+      id: `s_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      fields: sec.fields.map((f) => ({ ...f, key: genKey() })),
+    }));
+    pendingCopy.current = copy;
+    setActive(target);
+  };
 
   // Up to 3 questions can be marked "important" (carry score weight + correct answer)
   const importantCount = sections.reduce((n, s) => n + s.fields.filter((f) => f.important).length, 0);
@@ -133,7 +164,13 @@ export default function QuestionnairesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Questionnaires</h1>
           <p className="text-sm text-gray-500">Edit the questions candidates answer for each screening type.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <select value="" onChange={(e) => { if (e.target.value) duplicateQuestionnaire(e.target.value as Department); }}
+            title="Copy this whole questionnaire into another department"
+            className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="">Duplicate to…</option>
+            {DEPT_TABS.filter((d) => d.key !== active).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+          </select>
           <button onClick={reset}
             className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50">
             <RotateCcw size={15} /> Reset to default
@@ -196,6 +233,7 @@ export default function QuestionnairesPage() {
                     onChange={(patch) => updateField(si, fi, patch)}
                     onMove={(dir) => moveField(si, fi, dir)}
                     onRemove={() => removeField(si, fi)}
+                    onDuplicate={() => duplicateField(si, fi)}
                     onToggleImportant={() => toggleImportant(si, fi)} />
                 ))}
                 <button onClick={() => addField(si)}
@@ -216,15 +254,17 @@ export default function QuestionnairesPage() {
   );
 }
 
-function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onToggleImportant }: {
+function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onDuplicate, onToggleImportant }: {
   field: QField; si: number; fi: number; isFirst: boolean; isLast: boolean;
   onChange: (patch: Partial<QField>) => void;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
+  onDuplicate: () => void;
   onToggleImportant: () => void;
 }) {
   const hasOptions = TYPES_WITH_OPTIONS.includes(field.type) && field.optionsSource !== 'languages';
-  const locked = field.protected;
+  // System-protected (screening rules) OR admin-locked → can't edit/remove.
+  const locked = field.protected || field.locked;
   // Possible answers for the "correct answer" picker
   const answerChoices = field.type === 'confirm' ? ['Yes']
     : (field.optionsSource === 'languages' ? [] : (field.options || []));
@@ -252,14 +292,16 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onTog
         <div className="flex-1 space-y-2">
           {/* Label + type row */}
           <div className="flex gap-2 items-center flex-wrap">
-            <input value={field.label} onChange={(e) => onChange({ label: e.target.value })}
-              className={`${cls} flex-1 min-w-[200px]`} placeholder="Question text" />
+            <input value={field.label} disabled={locked} onChange={(e) => onChange({ label: e.target.value })}
+              className={`${cls} flex-1 min-w-[200px] disabled:bg-gray-100 disabled:text-gray-500`} placeholder="Question text" />
             <select value={field.type} onChange={(e) => onChange({ type: e.target.value as QFieldType })}
               disabled={locked}
               className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-100">
               {TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
-            {locked && <span title="Used by automatic screening rules" className="text-amber-500"><Lock size={14} /></span>}
+            {field.protected && <span title="Used by automatic screening rules" className="text-amber-500"><Lock size={14} /></span>}
+            {field.locked && !field.protected && <span title="Locked (unlock to edit)" className="text-gray-500"><Lock size={14} /></span>}
+            {field.hidden && <span className="text-[11px] font-medium bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">Hidden</span>}
           </div>
 
           {/* Options editor */}
@@ -274,26 +316,28 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onTog
               {(field.options || []).map((opt, oi) => (
                 <div key={oi} className="flex gap-2 items-center">
                   <span className="text-gray-300 text-xs">•</span>
-                  <input value={opt} onChange={(e) => setOption(oi, e.target.value)}
-                    className="flex-1 rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                  <input value={opt} disabled={locked} onChange={(e) => setOption(oi, e.target.value)}
+                    className="flex-1 rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400 disabled:bg-gray-100" />
                   {scorable && (
                     <input type="number" value={field.optionScores?.[opt] ?? ''} onChange={(e) => setOptionScore(opt, e.target.value)}
                       title="Points for this answer" placeholder="pts"
                       className="w-14 rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
                   )}
-                  <button onClick={() => removeOption(oi)} className="text-red-300 hover:text-red-500"><Trash2 size={13} /></button>
+                  {!locked && <button onClick={() => removeOption(oi)} className="text-red-300 hover:text-red-500"><Trash2 size={13} /></button>}
                 </div>
               ))}
-              <button onClick={addOption} className="text-xs text-brand-600 hover:underline flex items-center gap-1 ml-3">
-                <Plus size={12} /> Add option
-              </button>
+              {!locked && (
+                <button onClick={addOption} className="text-xs text-brand-600 hover:underline flex items-center gap-1 ml-3">
+                  <Plus size={12} /> Add option
+                </button>
+              )}
             </div>
           )}
 
           {/* Meta row */}
           <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
             <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={!!field.required} onChange={(e) => onChange({ required: e.target.checked })} className="accent-brand-600" />
+              <input type="checkbox" checked={!!field.required} disabled={locked} onChange={(e) => onChange({ required: e.target.checked })} className="accent-brand-600" />
               Required
             </label>
             {field.type === 'confirm' && (
@@ -346,6 +390,17 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onTog
             className={`p-1 ${field.important ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}>
             <Star size={15} className={field.important ? 'fill-amber-400' : ''} />
           </button>
+          {!field.protected && (
+            <button onClick={() => onChange({ locked: !field.locked })} title={field.locked ? 'Unlock question (allow editing)' : 'Lock question (prevent editing/removal)'}
+              className={`p-1 ${field.locked ? 'text-gray-700' : 'text-gray-300 hover:text-gray-600'}`}>
+              {field.locked ? <Unlock size={14} /> : <Lock size={14} />}
+            </button>
+          )}
+          <button onClick={() => onChange({ hidden: !field.hidden })} title={field.hidden ? 'Show to candidates' : 'Hide from candidates'}
+            className={`p-1 ${field.hidden ? 'text-gray-700' : 'text-gray-300 hover:text-gray-600'}`}>
+            {field.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+          <button onClick={onDuplicate} title="Duplicate question" className="p-1 text-gray-400 hover:text-brand-600"><Copy size={14} /></button>
           <button onClick={() => onMove(-1)} disabled={isFirst} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronUp size={14} /></button>
           <button onClick={() => onMove(1)} disabled={isLast} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"><ChevronDown size={14} /></button>
           {!locked && <button onClick={onRemove} className="p-1 text-red-400 hover:text-red-600"><Trash2 size={14} /></button>}
