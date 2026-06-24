@@ -102,6 +102,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
           <p className="font-semibold text-gray-800">{process.env.NEXT_PUBLIC_APP_NAME || 'TalentScreen'}</p>
+          <button onClick={logout} title="Sign out"
+            className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-brand-700 border border-gray-300 rounded-lg px-3 py-1.5 transition-colors">
+            <LogOut size={16} /> Sign Out
+          </button>
         </header>
 
         <main className="flex-1 overflow-auto p-6">
