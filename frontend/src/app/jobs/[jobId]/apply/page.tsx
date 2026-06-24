@@ -130,6 +130,9 @@ export default function JobApplyPage() {
     return null;
   };
 
+  // On step change, jump back to the top so each step starts at its heading.
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [step]);
+
   const next = () => {
     const err = validateStep(steps[safeStep]);
     if (err) { toast.error(err); return; }
