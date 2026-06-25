@@ -104,17 +104,25 @@ export default function QuestionnairesPage() {
     return s;
   });
 
-  // Copy the whole questionnaire into another department (review + Save there).
+  // Copy the whole questionnaire. To another department → opens it there to
+  // review + Save. To the SAME department → appends a duplicate set of all its
+  // sections/questions (review and trim/save).
   const duplicateQuestionnaire = (target: Department) => {
-    if (target === active) return;
-    if (!confirm(`Copy this questionnaire into "${DEPT_TABS.find((d) => d.key === target)?.label}"? You'll be taken there to review and Save — it replaces what's currently set for that department once you Save.`)) return;
+    const targetLabel = DEPT_TABS.find((d) => d.key === target)?.label;
     const copy = structuredClone(sections).map((sec) => ({
       ...sec,
       id: `s_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       fields: sec.fields.map((f) => ({ ...f, key: genKey() })),
     }));
-    pendingCopy.current = copy;
-    setActive(target);
+    if (target === active) {
+      if (!confirm(`Add a duplicate copy of all sections/questions into this "${targetLabel}" questionnaire?`)) return;
+      setSections((prev) => [...prev, ...copy]);
+      setDirty(true);
+    } else {
+      if (!confirm(`Copy this questionnaire into "${targetLabel}"? You'll be taken there to review and Save — it replaces what's currently set for that department once you Save.`)) return;
+      pendingCopy.current = copy;
+      setActive(target);
+    }
   };
 
   // Up to 3 questions can be marked "important" (carry score weight + correct answer)
@@ -169,7 +177,7 @@ export default function QuestionnairesPage() {
             title="Copy this whole questionnaire into another department"
             className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500">
             <option value="">Duplicate to…</option>
-            {DEPT_TABS.filter((d) => d.key !== active).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+            {DEPT_TABS.map((d) => <option key={d.key} value={d.key}>{d.label}{d.key === active ? ' (same — append copy)' : ''}</option>)}
           </select>
           <button onClick={reset}
             className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50">

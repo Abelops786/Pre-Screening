@@ -123,6 +123,15 @@ const submitJobApplication = async (req, res, next) => {
     });
 
     // ── Auto-disqualifiers ───────────────────────────────────
+    // Questions the admin hid must not be used for eligibility/rejection.
+    const qTemplate = await prisma.questionnaireTemplate.findUnique({ where: { department: job.department } });
+    const hiddenKeys = new Set(
+      (qTemplate?.schema?.sections || [])
+        .flatMap((s) => s.fields || [])
+        .filter((f) => f && f.hidden)
+        .map((f) => f.key),
+    );
+
     if (job.department === 'SALES') {
       const country = questionnaireAnswers?.country || location;
       if (isBlockedSalesLocation(country)) {
@@ -139,7 +148,7 @@ const submitJobApplication = async (req, res, next) => {
 
     if (job.department === 'INTERPRETATION') {
       const isASL = (questionnaireAnswers?.languagePair || '').toLowerCase().includes('asl');
-      if (isASL && questionnaireAnswers?.ridCertified !== 'Yes') {
+      if (isASL && !hiddenKeys.has('ridCertified') && questionnaireAnswers?.ridCertified !== 'Yes') {
         const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'ASL role requires a valid RID certification' }).catch(async (e) => {
           if (e.code === 'P2002') {
             const ex = await prisma.candidate.findUnique({ where: { email } });
@@ -150,7 +159,7 @@ const submitJobApplication = async (req, res, next) => {
         return success(res, { candidateId: c.id, autoDisqualified: true, reason: 'ASL role requires a valid RID certification' }, 'Application received', 201);
       }
 
-      if (job.positionType === 'US_BASED' && questionnaireAnswers?.residesInUS === 'No') {
+      if (job.positionType === 'US_BASED' && !hiddenKeys.has('residesInUS') && questionnaireAnswers?.residesInUS === 'No') {
         const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'U.S.-based position requires U.S. residency' }).catch(async (e) => {
           if (e.code === 'P2002') {
             const ex = await prisma.candidate.findUnique({ where: { email } });

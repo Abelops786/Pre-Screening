@@ -27,6 +27,7 @@ export default function JobApplyPage() {
   const [notFound, setNotFound] = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [step,     setStep]     = useState(0);
+  const [invalidKey, setInvalidKey] = useState<string | null>(null); // field flagged red on validation
 
   const [info,    setInfo]    = useState({ fullName: '', email: '', phone: '', location: '' });
   const [answers, setAnswers] = useState<Answers>({});
@@ -45,8 +46,8 @@ export default function JobApplyPage() {
       .finally(() => setLoading(false));
   }, [jobId]);
 
-  const setInfoField = (k: string) => (v: string) => setInfo((p) => ({ ...p, [k]: v }));
-  const setAnswer = (key: string, v: string | string[]) => setAnswers((p) => ({ ...p, [key]: v }));
+  const setInfoField = (k: string) => (v: string) => { setInvalidKey(null); setInfo((p) => ({ ...p, [k]: v })); };
+  const setAnswer = (key: string, v: string | string[]) => { setInvalidKey(null); setAnswers((p) => ({ ...p, [key]: v })); };
 
   // This job is for a fixed language — lock the "language pair" answer to it so
   // candidates can't pick a mismatching language (which then fails the voice test).
@@ -105,25 +106,26 @@ export default function JobApplyPage() {
   const isLast = safeStep === totalSteps - 1;
   const progress = Math.round(((safeStep + 1) / totalSteps) * 100);
 
-  // ── Validation for the current step ──
-  const validateStep = (entries: typeof allSections): string | null => {
+  // ── Validation for the current step ── returns the first problem (message +
+  // the field key, so we can flag that field red), or null when all good.
+  const validateStep = (entries: typeof allSections): { message: string; key: string } | null => {
     for (const item of entries) {
       if (item.personal) {
-        if (!info.fullName.trim()) return 'Full name is required';
-        if (!info.email.trim()) return 'Email is required';
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.email.trim())) return 'Please enter a valid email address';
-        if (!info.phone.trim()) return 'Phone is required';
+        if (!info.fullName.trim()) return { message: 'Full name is required', key: 'fullName' };
+        if (!info.email.trim()) return { message: 'Email is required', key: 'email' };
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.email.trim())) return { message: 'Please enter a valid email address', key: 'email' };
+        if (!info.phone.trim()) return { message: 'Phone is required', key: 'phone' };
         // The number part (after the dial code) must have at least 6 digits
-        if ((info.phone.replace(/^\+\d{1,4}/, '').match(/\d/g) || []).length < 6) return 'Please enter a valid phone number (digits only)';
-        if (!info.location.trim()) return 'Location is required';
-        if (!cvFile) return 'Please upload your CV / Resume';
+        if ((info.phone.replace(/^\+\d{1,4}/, '').match(/\d/g) || []).length < 6) return { message: 'Please enter a valid phone number (digits only)', key: 'phone' };
+        if (!info.location.trim()) return { message: 'Location is required', key: 'location' };
+        if (!cvFile) return { message: 'Please upload your CV / Resume', key: 'cv' };
       } else {
         for (const f of visibleFields(item.sec)) {
           // Every visible screening question is mandatory — candidates can't skip any.
           const v = answers[f.key];
-          if (f.type === 'checkbox') { if (!Array.isArray(v) || v.length === 0) return `"${f.label}" is required`; }
-          else if (f.type === 'confirm') { if (v !== 'Yes') return `Please confirm: "${f.label}"`; }
-          else if (!v || (typeof v === 'string' && !v.trim())) return `"${f.label}" is required`;
+          if (f.type === 'checkbox') { if (!Array.isArray(v) || v.length === 0) return { message: `"${f.label}" is required`, key: f.key }; }
+          else if (f.type === 'confirm') { if (v !== 'Yes') return { message: `Please confirm: "${f.label}"`, key: f.key }; }
+          else if (!v || (typeof v === 'string' && !v.trim())) return { message: `"${f.label}" is required`, key: f.key };
         }
       }
     }
@@ -135,16 +137,18 @@ export default function JobApplyPage() {
 
   const next = () => {
     const err = validateStep(steps[safeStep]);
-    if (err) { toast.error(err); return; }
+    if (err) { setInvalidKey(err.key); toast.error(err.message); return; }
+    setInvalidKey(null);
     setStep(safeStep + 1);
   };
 
   const submit = async () => {
     const err = validateStep(steps[safeStep]);
-    if (err) { toast.error(err); return; }
+    if (err) { setInvalidKey(err.key); toast.error(err.message); return; }
     // full validation across all steps
     const allErr = validateStep(allSections);
-    if (allErr) { toast.error(allErr); return; }
+    if (allErr) { setInvalidKey(allErr.key); toast.error(allErr.message); return; }
+    setInvalidKey(null);
 
     const vocarooField = (schema?.sections || []).flatMap((s) => s.fields).find((f) => f.type === 'vocaroo');
     const vocarooUrl = vocarooField ? (answers[vocarooField.key] as string) : undefined;
@@ -268,10 +272,10 @@ export default function JobApplyPage() {
                 {item.personal ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <FieldWrap label="Full Name" req><input value={info.fullName} onChange={(e) => setInfoField('fullName')(e.target.value)} className={cls} placeholder="John Smith" /></FieldWrap>
-                      <FieldWrap label="Email Address" req><input type="email" value={info.email} onChange={(e) => setInfoField('email')(e.target.value)} className={cls} placeholder="john@example.com" /></FieldWrap>
-                      <FieldWrap label="Phone / WhatsApp" req><PhoneInput value={info.phone} onChange={setInfoField('phone')} /></FieldWrap>
-                      <FieldWrap label="City / Country" req><input value={info.location} onChange={(e) => setInfoField('location')(e.target.value)} className={cls} placeholder="New York, USA" /></FieldWrap>
+                      <FieldWrap label="Full Name" req><input value={info.fullName} onChange={(e) => setInfoField('fullName')(e.target.value)} className={`${cls}${invalidKey === 'fullName' ? ' border-red-400 ring-1 ring-red-400' : ''}`} placeholder="John Smith" /></FieldWrap>
+                      <FieldWrap label="Email Address" req><input type="email" value={info.email} onChange={(e) => setInfoField('email')(e.target.value)} className={`${cls}${invalidKey === 'email' ? ' border-red-400 ring-1 ring-red-400' : ''}`} placeholder="john@example.com" /></FieldWrap>
+                      <FieldWrap label="Phone / WhatsApp" req><div className={invalidKey === 'phone' ? 'rounded-lg ring-1 ring-red-400' : ''}><PhoneInput value={info.phone} onChange={setInfoField('phone')} /></div></FieldWrap>
+                      <FieldWrap label="City / Country" req><input value={info.location} onChange={(e) => setInfoField('location')(e.target.value)} className={`${cls}${invalidKey === 'location' ? ' border-red-400 ring-1 ring-red-400' : ''}`} placeholder="New York, USA" /></FieldWrap>
                     </div>
 
                     {/* CV / Certificate uploads */}
@@ -281,7 +285,7 @@ export default function JobApplyPage() {
                         <input ref={cvInputRef} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden"
                           onChange={(e) => setCvFile(e.target.files?.[0] || null)} />
                         <button type="button" onClick={() => cvInputRef.current?.click()}
-                          className="w-full border-2 border-dashed border-gray-300 hover:border-brand-400 hover:bg-gray-50 rounded-xl p-4 text-center transition-colors">
+                          className={`w-full border-2 border-dashed hover:border-brand-400 hover:bg-gray-50 rounded-xl p-4 text-center transition-colors ${invalidKey === 'cv' ? 'border-red-400' : 'border-gray-300'}`}>
                           <Upload size={20} className="mx-auto text-gray-400 mb-1" />
                           {cvFile ? <span className="text-sm text-green-600 font-medium truncate block">{cvFile.name}</span>
                                   : <><span className="text-sm text-gray-600 block">Click to upload your CV</span><span className="text-xs text-gray-400">PDF or DOCX, max 10MB</span></>}
@@ -310,17 +314,25 @@ export default function JobApplyPage() {
                       </div>
                     )}
                     {visibleFields(item.sec).map((f) => (
-                      <DynField key={f.key} field={f}
-                        value={answers[f.key]}
-                        onChange={(v) => setAnswer(f.key, v)}
-                        onToggle={(v) => toggleMulti(f.key, v)}
-                        lockedLanguage={job.language || undefined} />
+                      <div key={f.key} className={invalidKey === f.key ? 'rounded-xl ring-2 ring-red-400 ring-offset-2 p-2 -m-2' : ''}>
+                        <DynField field={f}
+                          value={answers[f.key]}
+                          onChange={(v) => setAnswer(f.key, v)}
+                          onToggle={(v) => toggleMulti(f.key, v)}
+                          lockedLanguage={job.language || undefined} />
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
             );
           })}
+
+          {isLast && (
+            <p className="text-xs text-gray-500 text-center pt-2">
+              Please proceed further to complete the PC check and Language Proficiency Check to finalize your application.
+            </p>
+          )}
 
           {/* Navigation */}
           <div className="flex gap-3 pt-4 border-t border-gray-100">
@@ -335,7 +347,7 @@ export default function JobApplyPage() {
               <button onClick={submit} disabled={saving}
                 className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold rounded-xl px-6 py-2.5 transition-colors">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                {saving ? 'Submitting…' : 'Submit Application'}
+                {saving ? 'Creating…' : 'Create Profile'}
               </button>
             ) : (
               <button onClick={next}

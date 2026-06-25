@@ -8,6 +8,7 @@ const scoreQuestionnaire = (answers, schema) => {
   const fields = (schema?.sections || []).flatMap((s) => s.fields || []);
 
   for (const f of fields) {
+    if (f.hidden) continue; // admin hid this question — exclude from scoring entirely
     const ans = answers?.[f.key];
     const opt = f.optionScores || null;
 
