@@ -256,6 +256,15 @@ export default function QuestionnairesPage() {
             className="w-full flex items-center justify-center gap-2 py-4 border-2 border-dashed border-gray-300 rounded-2xl text-sm text-gray-500 hover:border-brand-400 hover:text-brand-600 transition-colors">
             <Plus size={16} /> Add Section
           </button>
+
+          {/* Save button at the bottom too, so long questionnaires don't need scrolling up */}
+          <div className="flex justify-end pt-2">
+            <button onClick={save} disabled={saving || !dirty}
+              className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2.5 transition-colors">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              {dirty ? 'Save Changes' : 'Saved'}
+            </button>
+          </div>
         </div>
       )}
     </div>
