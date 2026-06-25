@@ -1,14 +1,43 @@
 const prisma = require('../config/database');
 
+// Effective position/role: pre-set on the job, else from the candidate's answer.
+const effPos = (job, a) => job?.positionType || (a.positionType === 'us_based' ? 'US_BASED' : a.positionType === 'international' ? 'INTERNATIONAL' : null);
+const effRole = (job, a) => job?.roleType || (a.roleType === 'dedicated_hourly' ? 'DEDICATED_HOURLY' : a.roleType === 'per_minute' ? 'PER_MINUTE' : null);
+
+// Did the candidate actually SEE this section? (mirrors the apply form)
+const sectionShown = (sec, a, job) => {
+  if (sec.showIf?.jobPositionType && effPos(job, a) !== sec.showIf.jobPositionType) return false;
+  if (sec.showIf?.jobRoleType && effRole(job, a) !== sec.showIf.jobRoleType) return false;
+  return true;
+};
+
+// Did the candidate actually SEE this question? (hidden / conditional / job-gated)
+const fieldShown = (f, a, job) => {
+  if (f.hidden) return false;
+  if (f.hideIfJobHas === 'positionType' && job?.positionType) return false;
+  if (f.hideIfJobHas === 'roleType' && job?.roleType) return false;
+  const s = f.showIf;
+  if (!s) return true;
+  if (s.jobPositionType) return effPos(job, a) === s.jobPositionType;
+  if (s.jobRoleType) return effRole(job, a) === s.jobRoleType;
+  if (s.key && s.equals !== undefined) return a[s.key] === s.equals;
+  if (s.key && s.includes !== undefined) return String(a[s.key] || '').toLowerCase().includes(s.includes);
+  return true;
+};
+
 // ── Questionnaire score from per-option scores defined in the template ──
-// Returns { earned, max, percent } across all scored questions.
-const scoreQuestionnaire = (answers, schema) => {
+// Only counts questions the candidate actually saw, so the % reflects the
+// answers they could give (not conditional/hidden questions they never saw).
+// Returns { earned, max, percent } across all scored, visible questions.
+const scoreQuestionnaire = (answers, schema, job) => {
   let earned = 0;
   let max = 0;
-  const fields = (schema?.sections || []).flatMap((s) => s.fields || []);
+  const a = answers || {};
+  const fields = (schema?.sections || [])
+    .filter((s) => sectionShown(s, a, job))
+    .flatMap((s) => (s.fields || []).filter((f) => fieldShown(f, a, job)));
 
   for (const f of fields) {
-    if (f.hidden) continue; // admin hid this question — exclude from scoring entirely
     const ans = answers?.[f.key];
     const opt = f.optionScores || null;
 
@@ -95,7 +124,7 @@ const evaluate = async (candidate) => {
     ? await prisma.questionnaireTemplate.findUnique({ where: { department: candidate.department } })
     : null;
 
-  const q = scoreQuestionnaire(answers, template?.schema);
+  const q = scoreQuestionnaire(answers, template?.schema, candidate.job);
   const questionnaireScore = q.percent;            // may be null if nothing scored
   const audioScore         = scoreAudio(audio);
   const speedScore         = scoreSpeed(check, minDown, minUp);
