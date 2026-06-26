@@ -59,11 +59,16 @@ const scoreQuestionnaire = (answers, schema, job) => {
       max += qMax;
       if (typeof ans === 'string' && Number.isFinite(Number(opt[ans]))) earned += Number(opt[ans]);
     } else if (f.type === 'checkbox' && opt) {
+      // Score a multi-select by the BEST option the candidate picked, not the
+      // sum of all options. Selecting any one valid answer (e.g. a single real
+      // specialization) earns full marks for the question — a candidate isn't
+      // penalised for not claiming they specialise in everything.
       const positive = Object.values(opt).map(Number).filter((n) => Number.isFinite(n) && n > 0);
-      const qMax = positive.reduce((a, b) => a + b, 0);
+      const qMax = positive.length ? Math.max(...positive) : 0;
       max += qMax;
-      if (Array.isArray(ans)) {
-        for (const sel of ans) if (Number.isFinite(Number(opt[sel]))) earned += Number(opt[sel]);
+      if (Array.isArray(ans) && ans.length) {
+        const best = Math.max(0, ...ans.map((sel) => Number(opt[sel]) || 0));
+        earned += Math.min(best, qMax);
       }
     } else if (f.type === 'confirm' && Number(f.score) > 0) {
       max += Number(f.score);
