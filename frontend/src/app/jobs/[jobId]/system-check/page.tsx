@@ -167,9 +167,15 @@ function SystemCheckContent() {
         micPermitted: micGranted, speakerPermitted: true,
         ...(d ?? {}),
       });
-      toast.success('System check complete!');
-      // Always go to audio recording next (voice screening)
-      router.push(`/jobs/${jobId}/audio?id=${candidateId}`);
+      // Passed → audio interview. Failed → finish on the completion screen (the
+      // backend marks it SYSTEM_CHECK_FAILED); sending them to audio would error
+      // with "not in audio pending state".
+      if (allOk) {
+        toast.success('System check complete!');
+        router.push(`/jobs/${jobId}/audio?id=${candidateId}`);
+      } else {
+        router.push(`/jobs/${jobId}/complete?disqualified=true`);
+      }
     } catch { toast.error('Failed to save system check. Please try again.'); }
     finally { setSubmitting(false); }
   };
@@ -247,7 +253,7 @@ function SystemCheckContent() {
               <button onClick={submit} disabled={submitting}
                 className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors">
                 {submitting ? <Loader2 size={18} className="animate-spin" /> : null}
-                {submitting ? 'Saving…' : 'Continue to Audio Interview →'}
+                {submitting ? 'Saving…' : allOk ? 'Continue to Audio Interview →' : 'Finish →'}
               </button>
             </div>
           )}
