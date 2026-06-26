@@ -280,8 +280,10 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onDup
   onToggleImportant: () => void;
 }) {
   const hasOptions = TYPES_WITH_OPTIONS.includes(field.type) && field.optionsSource !== 'languages';
-  // System-protected (screening rules) OR admin-locked → can't edit/remove.
-  const locked = field.protected || field.locked;
+  // Admin-locked → nothing editable. System-protected (screening rules) → the
+  // wording stays editable, but the type can't change and it can't be removed.
+  const adminLocked = !!field.locked;
+  const locked = field.protected || adminLocked;
   // Possible answers for the "correct answer" picker
   const answerChoices = field.type === 'confirm' ? ['Yes']
     : (field.optionsSource === 'languages' ? [] : (field.options || []));
@@ -309,15 +311,15 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onDup
         <div className="flex-1 space-y-2">
           {/* Label + type row */}
           <div className="flex gap-2 items-center flex-wrap">
-            <input value={field.label} disabled={locked} onChange={(e) => onChange({ label: e.target.value })}
+            <input value={field.label} disabled={adminLocked} onChange={(e) => onChange({ label: e.target.value })}
               className={`${cls} flex-1 min-w-[200px] disabled:bg-gray-100 disabled:text-gray-500`} placeholder="Question text" />
             <select value={field.type} onChange={(e) => onChange({ type: e.target.value as QFieldType })}
               disabled={locked}
               className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-100">
               {TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
-            {field.protected && <span title="Used by automatic screening rules" className="text-amber-500"><Lock size={14} /></span>}
-            {field.locked && !field.protected && <span title="Locked (unlock to edit)" className="text-gray-500"><Lock size={14} /></span>}
+            {field.protected && <span title="Used by automatic screening — you can edit the wording, but it can't be retyped or removed" className="text-[11px] font-medium bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">Screening</span>}
+            {field.locked && <span className="text-[11px] font-medium bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">Locked</span>}
             {field.hidden && <span className="text-[11px] font-medium bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">Hidden</span>}
           </div>
 
@@ -354,7 +356,7 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onDup
           {/* Meta row */}
           <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
             <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={!!field.required} disabled={locked} onChange={(e) => onChange({ required: e.target.checked })} className="accent-brand-600" />
+              <input type="checkbox" checked={!!field.required} disabled={adminLocked} onChange={(e) => onChange({ required: e.target.checked })} className="accent-brand-600" />
               Required
             </label>
             {field.type === 'confirm' && (
@@ -407,12 +409,10 @@ function FieldEditor({ field, isFirst, isLast, onChange, onMove, onRemove, onDup
             className={`p-1 ${field.important ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}>
             <Star size={15} className={field.important ? 'fill-amber-400' : ''} />
           </button>
-          {!field.protected && (
-            <button onClick={() => onChange({ locked: !field.locked })} title={field.locked ? 'Unlock question (allow editing)' : 'Lock question (prevent editing/removal)'}
-              className={`p-1 ${field.locked ? 'text-gray-700' : 'text-gray-300 hover:text-gray-600'}`}>
-              {field.locked ? <Unlock size={14} /> : <Lock size={14} />}
-            </button>
-          )}
+          <button onClick={() => onChange({ locked: !field.locked })} title={field.locked ? 'Unlock question (allow editing)' : 'Lock question (prevent editing/removal)'}
+            className={`p-1 ${field.locked ? 'text-gray-700' : 'text-gray-300 hover:text-gray-600'}`}>
+            {field.locked ? <Unlock size={14} /> : <Lock size={14} />}
+          </button>
           <button onClick={() => onChange({ hidden: !field.hidden })} title={field.hidden ? 'Show to candidates' : 'Hide from candidates'}
             className={`p-1 ${field.hidden ? 'text-gray-700' : 'text-gray-300 hover:text-gray-600'}`}>
             {field.hidden ? <EyeOff size={14} /> : <Eye size={14} />}

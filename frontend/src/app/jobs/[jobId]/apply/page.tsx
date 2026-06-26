@@ -329,9 +329,11 @@ export default function JobApplyPage() {
           })}
 
           {isLast && (
-            <p className="text-xs text-gray-500 text-center pt-2">
-              Please proceed further to complete the PC check and Language Proficiency Check to finalize your application.
-            </p>
+            <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
+              <p className="text-sm font-semibold text-gray-800 text-center">
+                Please proceed further to complete the PC check and Language Proficiency Check to finalize your application.
+              </p>
+            </div>
           )}
 
           {/* Navigation */}
