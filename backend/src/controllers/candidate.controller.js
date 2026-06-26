@@ -108,20 +108,6 @@ const submitJobApplication = async (req, res, next) => {
       },
     });
 
-    const updateCandidateForNewJob = (existingId) => prisma.candidate.update({
-      where: { id: existingId },
-      data: {
-        fullName, phone, location,
-        department: job.department,
-        jobId,
-        vocarooUrl: vocarooUrl || null,
-        questionnaireAnswers: questionnaireAnswers || {},
-        selectedLanguage: extractedLanguage,
-        status: 'PENDING',
-        autoDisqualifyReason: null,
-      },
-    });
-
     // ── Auto-disqualifiers ───────────────────────────────────
     // Questions the admin hid must not be used for eligibility/rejection.
     const qTemplate = await prisma.questionnaireTemplate.findUnique({ where: { department: job.department } });
@@ -135,13 +121,7 @@ const submitJobApplication = async (req, res, next) => {
     if (job.department === 'SALES') {
       const country = questionnaireAnswers?.country || location;
       if (isBlockedSalesLocation(country)) {
-        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'Location not eligible for this campaign' }).catch(async (e) => {
-          if (e.code === 'P2002') {
-            const ex = await prisma.candidate.findFirst({ where: { email, jobId } });
-            return updateCandidateForNewJob(ex.id).then((u) => ({ ...u, autoDisqualifyReason: 'Location not eligible for this campaign' }));
-          }
-          throw e;
-        });
+        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'Location not eligible for this campaign' });
         return success(res, { candidateId: c.id, autoDisqualified: true, reason: 'Location not eligible for this campaign' }, 'Application received', 201);
       }
     }
@@ -149,46 +129,34 @@ const submitJobApplication = async (req, res, next) => {
     if (job.department === 'INTERPRETATION') {
       const isASL = (questionnaireAnswers?.languagePair || '').toLowerCase().includes('asl');
       if (isASL && !hiddenKeys.has('ridCertified') && questionnaireAnswers?.ridCertified !== 'Yes') {
-        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'ASL role requires a valid RID certification' }).catch(async (e) => {
-          if (e.code === 'P2002') {
-            const ex = await prisma.candidate.findFirst({ where: { email, jobId } });
-            return updateCandidateForNewJob(ex.id).then((u) => ({ ...u, autoDisqualifyReason: 'ASL role requires a valid RID certification' }));
-          }
-          throw e;
-        });
+        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'ASL role requires a valid RID certification' });
         return success(res, { candidateId: c.id, autoDisqualified: true, reason: 'ASL role requires a valid RID certification' }, 'Application received', 201);
       }
 
       if (job.positionType === 'US_BASED' && !hiddenKeys.has('residesInUS') && questionnaireAnswers?.residesInUS === 'No') {
-        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'U.S.-based position requires U.S. residency' }).catch(async (e) => {
-          if (e.code === 'P2002') {
-            const ex = await prisma.candidate.findFirst({ where: { email, jobId } });
-            return updateCandidateForNewJob(ex.id).then((u) => ({ ...u, autoDisqualifyReason: 'U.S.-based position requires U.S. residency' }));
-          }
-          throw e;
-        });
+        const c = await createCandidate({ status: 'AUTO_DISQUALIFIED', autoDisqualifyReason: 'U.S.-based position requires U.S. residency' });
         return success(res, { candidateId: c.id, autoDisqualified: true, reason: 'U.S.-based position requires U.S. residency' }, 'Application received', 201);
       }
     }
 
     // ── Create candidate ──
-    // The same email may apply to DIFFERENT jobs (separate applications). The
-    // (email, jobId) unique only triggers when re-applying to the SAME job —
-    // in which case we resume rather than create a duplicate.
-    let candidate;
-    try {
-      candidate = await createCandidate();
-    } catch (e) {
-      if (e.code === 'P2002') {
-        const existing = await prisma.candidate.findFirst({ where: { email, jobId } });
-        if (existing) {
-          return res.status(409).json({ success: false, message: 'already_applied', data: { id: existing.id, status: existing.status, jobId: existing.jobId } });
-        }
-        throw e;
-      } else {
-        throw e;
-      }
+    // Candidates can apply freely — a previous, completed, or deleted application
+    // never blocks a new one. If they have an in-progress application for THIS
+    // job (e.g. they refreshed), we resume it instead of creating a duplicate.
+    const IN_PROGRESS = ['PENDING', 'SYSTEM_CHECK_FAILED', 'AUDIO_PENDING', 'PROCESSING'];
+    const resumable = await prisma.candidate.findFirst({
+      where: { email, jobId, deletedAt: null, status: { in: IN_PROGRESS } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (resumable) {
+      const updated = await prisma.candidate.update({
+        where: { id: resumable.id },
+        data: { fullName, phone, location, vocarooUrl: vocarooUrl || null, questionnaireAnswers: questionnaireAnswers || {}, selectedLanguage: extractedLanguage },
+      });
+      return res.status(409).json({ success: false, message: 'already_applied', data: { id: updated.id, status: updated.status, jobId: updated.jobId } });
     }
+
+    const candidate = await createCandidate();
 
     emailService.sendConfirmation(candidate).catch(() => {});
     return success(res, { candidateId: candidate.id, autoDisqualified: false }, 'Application submitted successfully', 201);

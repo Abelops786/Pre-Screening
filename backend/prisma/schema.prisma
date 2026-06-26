@@ -177,8 +177,9 @@ model Candidate {
   internalNotes      InternalNote[]
   interviews         Interview[]
 
-  // One application per job per email — same email can apply to different jobs.
-  @@unique([email, jobId])
+  // No uniqueness on email/job — candidates can apply freely (even after a
+  // previous or deleted application). Resume of an in-progress application is
+  // handled in code, not by a DB constraint.
   @@map("candidates")
 }
 
